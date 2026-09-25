@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en" data-scrollwork-smooth>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Scrollwork: attributes</title>
+  <style>
+    body { margin: 0; font: 18px/1.5 system-ui, sans-serif; color: #16160f; background: #fffff7; }
+    section { min-height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 24px; padding: 0 24px; text-align: center; }
+    h1 { font-size: clamp(40px, 8vw, 96px); line-height: 1; margin: 0; max-width: 12ch; }
+    .card { width: min(520px, 90vw); height: 280px; border-radius: 20px; background: #6c4dff; }
+    .button { padding: 14px 24px; border-radius: 999px; background: #16160f; color: #fffff7; text-decoration: none; }
+    .pin-wrap { min-height: 220vh; justify-content: flex-start; padding-top: 20vh; }
+    @media (prefers-color-scheme: dark) { body { color: #f2f2ea; background: #16160f; } .button { background: #f2f2ea; color: #16160f; } }
+  </style>
+</head>
+<body>
+  <section>
+    <h1 data-scrollwork='{"appear": {"effect": "mask", "split": "lines", "duration": 1}}'>Motion that tells the story</h1>
+    <a class="button" href="#more" data-scrollwork='{"hover": {"scale": 1.05}, "press": {"scale": 0.96}}'>Scroll down</a>
+  </section>
+  <section id="more">
+    <div class="card" data-scrollwork='{"scroll": {"from": {"scale": 0.85, "rotate": -4}, "to": {"scale": 1, "rotate": 0}, "range": "in"}}'></div>
+    <p data-scrollwork='{"appear": {"effect": "fade", "split": "words", "stagger": 0.04}}'>Every word of this line arrives on its own.</p>
+  </section>
+  <section class="pin-wrap">
+    <h1 data-scrollwork='{"pin": {"distance": 600, "top": 120}}'>Pinned for a while</h1>
+  </section>
+  <!-- After `npm run build`; or use https://cdn.jsdelivr.net/npm/scrollwork@1/dist/scrollwork.min.js -->
+  <script src="../dist/scrollwork.min.js" data-auto></script>
+</body>
+</html>

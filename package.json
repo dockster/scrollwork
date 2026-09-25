@@ -1,0 +1,72 @@
+{
+  "name": "scrollwork",
+  "version": "1.0.0",
+  "description": "Scroll, appear, pin and interaction motion for the web, from JSON or data attributes, plus animate(), inView() and scroll(). A few KB, no dependencies, respects reduced motion.",
+  "type": "module",
+  "main": "./dist/scrollwork.mjs",
+  "module": "./dist/scrollwork.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/scrollwork.mjs",
+      "default": "./dist/scrollwork.mjs"
+    },
+    "./global": {
+      "default": "./dist/scrollwork.js"
+    },
+    "./global.min": {
+      "default": "./dist/scrollwork.min.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "unpkg": "./dist/scrollwork.min.js",
+  "jsdelivr": "./dist/scrollwork.min.js",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": [
+    "./dist/scrollwork.js",
+    "./dist/scrollwork.min.js"
+  ],
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test tests/unit/*.test.mjs",
+    "test:browsers": "node tests/browsers.mjs",
+    "prepublishOnly": "npm run typecheck && npm run build && npm test && npm run test:package",
+    "release:zip": "node scripts/pack-release.mjs",
+    "test:package": "node tests/package.mjs"
+  },
+  "keywords": [
+    "animation",
+    "scroll",
+    "scroll-animation",
+    "parallax",
+    "motion",
+    "scrolltrigger",
+    "in-view",
+    "reduced-motion",
+    "vanilla"
+  ],
+  "author": "uxspot.io",
+  "license": "MIT",
+  "homepage": "https://uxspot.io/scrollwork",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dockster/scrollwork.git"
+  },
+  "bugs": {
+    "url": "https://github.com/dockster/scrollwork/issues"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "playwright": "^1.63.0",
+    "typescript": "^7.0.2"
+  }
+}
