@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.2 (2026-09-25)
+
+Documentation only; the code is the same as 1.0.1.
+
+- The reference now lists every field an interaction's action takes: the
+  `target` of `navigate`, `swap` and `overlay`, an overlay's `position`,
+  `closeOnOutside` and `background`, and a screen change's `transition` and
+  `direction`, with what Scrollwork does with them.
+- The README names the value for splitting into letters: `chars`.
+
 ## 1.0.1 (2026-09-25)
 
 - Positions are measured again when the page changes under the motion, not

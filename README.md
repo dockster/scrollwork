@@ -99,7 +99,7 @@ defaults, is in [docs/REFERENCE.md](docs/REFERENCE.md).
 
 | Key | What it does |
 |---|---|
-| `appear` | Plays once the element comes into view: `fade`, `slide-up`, `mask`, `blur`, `scale` or a `custom` start state. Text can be split into lines, words or letters, with a stagger. |
+| `appear` | Plays once the element comes into view: `fade`, `slide-up`, `mask`, `blur`, `scale` or a `custom` start state. Text can be split into `lines`, `words` or letters (`chars`), with a stagger. |
 | `scroll` | Follows the scroll position: parallax (`speed`), or `from` and `to` states scrubbed across the element's passage. |
 | `pin` | Holds the element in place for a stretch of scrolling. |
 | `hover`, `press` | A state to move to while hovered (or focused by keyboard) or pressed. |

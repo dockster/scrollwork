@@ -86,8 +86,19 @@ The full form, a list:
 | `trigger` | `"none"` | `click`, `drag`, `hover`, `press`, `key`, `mouseenter`, `mouseleave`, `mousedown`, `mouseup`, `delay` |
 | `key` | none | for `key`: the key as `KeyboardEvent.key` (`"k"`, `"ArrowRight"`, `" "`) |
 | `delay` | `0` | seconds before the action (kept under reduced motion) |
-| `action.type` | `"none"` | `change` (to `state`), `scroll` (to `target`), `url` (`url`, `newTab`), `navigate`, `back`, `overlay`, `swap`, `close` |
-| `animation` | `{ "curve": "out", "duration": 0.25 }` | `kind: "instant"` for no motion; `curve: "custom"` with `bezier: [x1, y1, x2, y2]` |
+| `action.type` | `"none"` | `change` (to `state`), `scroll` (to `target`), `url` (`url`, `newTab`), `navigate` and `swap` (to `target`), `overlay` (below), `back`, `close` |
+| `animation` | `{ "curve": "out", "duration": 0.25 }` | `kind: "instant"` for no motion; `curve: "custom"` with `bezier: [x1, y1, x2, y2]`; press defaults to 0.12 s |
+
+A `scroll` target is another element's `data-sw-id`. A `navigate`, `swap` or
+`overlay` target is whatever your page's `navigate` option understands; with
+`auto()`, a `#hash` or a URL. An `overlay` also takes `position` (`center`,
+the default, `top-left`, `top-center`, `top-right`, `bottom-left`,
+`bottom-center`, `bottom-right`), `closeOnOutside` and `background` (both
+`true` unless set to `false`). A screen change's `animation` can carry a
+`transition` (`instant`, `dissolve`, `smart`, `move-in`, `move-out`, `push`,
+`slide-in`, `slide-out`) and a `direction` (`left`, `right`, `top`,
+`bottom`); Scrollwork hands the interaction, with them, to your `navigate`,
+`overlay` and `swap` options, and plays nothing itself.
 
 A `click` or `key` change flips back and forth; `hover` and `press` hold it for
 as long as they last. `navigate`, `back`, `overlay`, `swap` and `close` call
