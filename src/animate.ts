@@ -188,7 +188,10 @@ export function animate(targets: Targets, keyframes: Keyframes, options: Animate
       // an onComplete that played it again keeps it running
       return playing;
     }
-    if (dir < 0 && t <= 0) {
+    // Backwards, it has ended once every target is back at its start: the
+    // first target is the last to get there, at the start delay. The delay
+    // itself is waiting, not motion, so it is not played backwards.
+    if (dir < 0 && t <= delay) {
       t = 0;
       render();
       complete();

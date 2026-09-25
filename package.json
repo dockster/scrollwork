@@ -1,6 +1,6 @@
 {
   "name": "scrollwork",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Scroll, appear, pin and interaction motion for the web, from JSON or data attributes, plus animate(), inView() and scroll(). A few KB, no dependencies, respects reduced motion.",
   "type": "module",
   "main": "./dist/scrollwork.mjs",
@@ -25,7 +25,8 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "CHANGELOG.md"
   ],
   "sideEffects": [
     "./dist/scrollwork.js",

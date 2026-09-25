@@ -166,9 +166,7 @@ are not in the test runs.
 
 Known limits in 1.0: pinned and parallax elements are moved by script after
 the browser scrolls, so iOS momentum scrolling may show a slight lag;
-positions are re-measured when the root element resizes or the window does,
-not on every layout change inside it; `reverse()` plays back through a
-delay too; and an element that `auto()` or `start()` takes over begins from
+and an element that `auto()` or `start()` takes over begins from
 its author's look, so the end state of an earlier `animate()` on it is not
 kept once the engine stops.
 

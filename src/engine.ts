@@ -268,6 +268,17 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
     touch();
   };
   measure();
+  /**
+   * The page changed under the motion (a block collapsed, a class shown or
+   * hidden, an image loaded): measure again at the start of the next frame,
+   * before anything is written, so the read never forces a layout of its own.
+   */
+  let stale = false;
+  const remeasure = () => {
+    if (stopped) return;
+    stale = true;
+    touch();
+  };
 
   /** pin offsets of the layer's pinned ancestors: they carry it along */
   const carried = (el: HTMLElement) => {
@@ -451,6 +462,10 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
     if (stopped) return;
     const dt = last ? Math.min(100, now - last) : 0;
     last = now;
+    if (stale) {
+      stale = false;
+      measure();
+    }
     if (tween) {
       if (!tween.t0) tween.t0 = now;
       const k = clamp01((now - tween.t0) / Math.max(1, tween.ms));
@@ -487,11 +502,12 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
   };
 
   let ro: ResizeObserver | null = null;
+  let mo: MutationObserver | null = null;
   const surface: EventTarget = scroller || win;
   const unlisten: Array<() => void> = [];
-  const on = (el: EventTarget, type: string, fn: (ev: Event) => void) => {
-    el.addEventListener(type, fn);
-    unlisten.push(() => el.removeEventListener(type, fn));
+  const on = (el: EventTarget, type: string, fn: (ev: Event) => void, capture = false) => {
+    el.addEventListener(type, fn, capture);
+    unlisten.push(() => el.removeEventListener(type, fn, capture));
   };
   const timers = new Set<number>();
   const later = (seconds: number, fn: () => void) => {
@@ -731,11 +747,37 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
         unlisten.push(() => mq.removeEventListener('change', follow));
       }
     }
+    // Sizes: the root, and every moving element and trigger (text rewraps, a
+    // media query) — none of which Scrollwork itself changes, since it only
+    // moves, scales and fades.
     if (typeof ResizeObserver !== 'undefined') {
-      ro = new ResizeObserver(measure);
+      ro = new ResizeObserver(remeasure);
       ro.observe(root);
+      for (const e of entries) ro.observe(e.el);
+      for (const el of others.keys()) ro.observe(el);
     }
-    if (root.ownerDocument.fonts) root.ownerDocument.fonts.ready.then(() => !stopped && measure());
+    // Positions: something above moved without anything resizing. Scrollwork's
+    // own writes (the style of what it moves, and the spans it splits text into)
+    // are not changes to the page and are ignored, or it would chase itself.
+    if (typeof MutationObserver !== 'undefined') {
+      const ours = (n: Node) => {
+        const el = n as HTMLElement;
+        return byEl.has(el) || (typeof el.className === 'string' && el.className.indexOf('ux-motion-') === 0);
+      };
+      mo = new MutationObserver((records) => {
+        for (const r of records) {
+          if (r.type === 'attributes' && r.attributeName === 'style' && ours(r.target)) continue;
+          if (r.type === 'childList' && ours(r.target)) continue;
+          if (r.type === 'childList' && [...Array.from(r.addedNodes), ...Array.from(r.removedNodes)].every(ours)) continue;
+          remeasure();
+          return;
+        }
+      });
+      mo.observe(root, { subtree: true, childList: true, attributes: true, attributeFilter: ['class', 'style', 'hidden', 'open', 'src', 'width', 'height'] });
+    }
+    // an image or a frame finishing loading can push everything below it
+    on(root, 'load', remeasure, true);
+    if (root.ownerDocument.fonts) root.ownerDocument.fonts.ready.then(remeasure);
     raf = win.requestAnimationFrame(tick);
   }
 
@@ -750,6 +792,7 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
         surface.removeEventListener('scroll', onScroll);
       }
       if (ro) ro.disconnect();
+      if (mo) mo.disconnect();
       for (const off of unlisten.splice(0)) off();
       for (const e of entries) {
         // the author's inline values come back, not blanks

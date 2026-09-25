@@ -11,6 +11,8 @@ import * as pw from 'playwright';
 const ORIGIN = 'http://scrollwork.test';
 const DIST = (f) => readFileSync(new URL(`../dist/${f}`, import.meta.url));
 const BROWSERS = (process.env.BROWSERS || 'chromium,webkit,firefox').split(',');
+/** the version the build stamps in, from package.json */
+const VERSION = JSON.parse(readFileSync(new URL('../package.json', import.meta.url))).version;
 
 const results = [];
 const check = (name, ok, detail = '') => {
@@ -350,7 +352,7 @@ for (const name of BROWSERS) {
     });
     await p.waitForTimeout(400);
     const esm = await p.evaluate(() => ({ v: window.esm, x: getComputedStyle(document.getElementById('m')).translate }));
-    check(tag('the ES module imports and plays'), esm.v === '1.0.0' && /^30px/.test(esm.x), JSON.stringify(esm));
+    check(tag('the ES module imports and plays'), esm.v === VERSION && /^30px/.test(esm.x), JSON.stringify(esm));
     check(tag('no errors (esm)'), errors.length === 0, errors.join(' | '));
     await ctx.close();
   }
@@ -566,6 +568,42 @@ for (const name of BROWSERS) {
     });
     check(tag('overlapping auto(): the id stays while a run still uses it'), !!ids.during && ids.after === null, JSON.stringify(ids));
     check(tag('no errors (overlap)'), errors.length === 0, errors.join(' | '));
+    await ctx.close();
+  }
+
+  // ── layout changes with no scroll and no resize (known limit, fixed 2026-09-25) ──
+  {
+    const { p, ctx, errors } = await page(
+      browser,
+      `<style>.gone{display:none}</style><section style="height:3000px"><div id="spacer" style="height:900px"></div><div id="banner" style="height:500px">banner</div><div id="late" data-scrollwork='{"appear":{"effect":"fade","duration":0.2}}'>late</div></section>`
+    );
+    await p.evaluate(() => (window.sw = window.Scrollwork.auto()));
+    await p.waitForTimeout(400);
+    const before = await p.evaluate(() => getComputedStyle(document.getElementById('late')).opacity);
+    // the page collapses the spacer: the section keeps its height, nothing resizes
+    await p.evaluate(() => (document.getElementById('spacer').style.height = '50px'));
+    await p.waitForTimeout(150);
+    const halfway = await p.evaluate(() => getComputedStyle(document.getElementById('late')).opacity);
+    // and a class hides the banner: now it is in view
+    await p.evaluate(() => document.getElementById('banner').classList.add('gone'));
+    await p.waitForTimeout(500);
+    const after = await p.evaluate(() => getComputedStyle(document.getElementById('late')).opacity);
+    check(tag('an element moved into view by the page, with no scroll or resize, appears'), before === '0' && after === '1', `${before} ${halfway} ${after}`);
+    check(tag('no errors (layout change)'), errors.length === 0, errors.join(' | '));
+    await ctx.close();
+  }
+  {
+    const { p, ctx, errors } = await page(browser, `<div id="a">a</div>`);
+    const back = await p.evaluate(async () => {
+      const a = window.Scrollwork.animate('#a', { x: [0, 100] }, { duration: 0.2, delay: 0.8, ease: 'linear' });
+      await a.finished;
+      const t0 = performance.now();
+      a.reverse();
+      await a.finished;
+      return { ms: Math.round(performance.now() - t0), x: getComputedStyle(document.getElementById('a')).translate };
+    });
+    check(tag('reverse() ends when it is back at the start, not after the delay again'), back.ms < 500 && !/100px/.test(back.x), JSON.stringify(back));
+    check(tag('no errors (reverse)'), errors.length === 0, errors.join(' | '));
     await ctx.close();
   }
 
