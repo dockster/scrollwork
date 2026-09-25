@@ -240,6 +240,9 @@ for (const name of BROWSERS) {
       },
       { ix: change('hover', { x: 40 }, { animation: { kind: 'animate', curve: 'custom', bezier: [0.5, 0, 1.6, 1], duration: 0.2 } }) }
     );
+    // the pointer starts at the page's corner, which is this element: from
+    // outside first, or entering it is not an entry on every platform
+    await p.mouse.move(600, 500);
     await p.hover('#t');
     await sleep(500);
     const tr = await p.evaluate(() => getComputedStyle(document.getElementById('t')).translate);
