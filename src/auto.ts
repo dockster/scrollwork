@@ -25,6 +25,8 @@ const BLOCKS = 'div, p, section, article, header, footer, ul, ol, li, table, fig
 export interface AutoOptions extends Partial<Omit<MotionOptions, 'attr' | 'root'>> {
   /** smooth wheel scrolling; defaults to a data-scrollwork-smooth attribute on the root or <html> */
   smooth?: boolean;
+  /** pin with position: sticky (see MotionOptions); defaults to a data-scrollwork-sticky attribute on the root or <html> */
+  sticky?: boolean;
 }
 
 /** Read every [data-scrollwork] under `root` into a spec. */
@@ -86,6 +88,8 @@ export function autoWith(start: (spec: MotionSpec, opts: MotionOptions) => Motio
   if (options.smooth !== undefined) spec.smooth = options.smooth;
   const win = root.ownerDocument.defaultView || window;
   const reduced = options.reduced ?? (typeof win.matchMedia === 'function' && win.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  const doc = root.ownerDocument;
+  const sticky = options.sticky ?? (root.hasAttribute('data-scrollwork-sticky') || doc.documentElement.hasAttribute('data-scrollwork-sticky'));
   const control = start(spec, {
     split: true,
     scroller: null,
@@ -98,6 +102,7 @@ export function autoWith(start: (spec: MotionSpec, opts: MotionOptions) => Motio
     ...options,
     reduced,
     warn,
+    sticky,
     attr: 'data-sw-id',
     root,
   });

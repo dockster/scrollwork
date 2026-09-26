@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.1.0 (unreleased)
+
+- Pins can be held by `position: sticky`: turn it on with
+  `data-scrollwork-sticky` on `<html>` (or `sticky: true` in code). The browser
+  then moves a pin with its own scroll, so on iOS it stays still through a
+  fling instead of trailing it by up to 185px. Where the layout does not allow
+  it (a scrolling box in between, an inline or floated element, a pin inside
+  another pin), or it would change how the page looks, that pin moves by
+  script as before. Off by default: sticky moves each pinned element into a
+  track of its own, which a page rendered by React or Vue must not have.
+- `stop()` gives an element back its style attribute exactly as it was: an
+  element that had none no longer keeps an empty `style=""`.
+
 ## 1.0.2 (2026-09-25)
 
 Documentation only; the code is the same as 1.0.1.

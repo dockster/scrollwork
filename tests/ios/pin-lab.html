@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en" data-scrollwork-sticky>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pin lab</title>
+<!--
+  Does a pinned element hold still while iOS scrolls with momentum?
+
+  Three marks share one line, 100px from the top of the view, for the whole hold:
+    green  position: fixed. The browser draws it where it belongs, always: the reference.
+    red    pinned by Scrollwork (script, after each scroll).
+    blue   pinned by a CSS scroll-driven animation (the browser, with the scroll).
+    orange position: sticky (the browser's own pin).
+  A screen recording is measured frame by frame (tests/ios/measure.py): how far
+  red and blue sit from green is the lag a reader sees.
+
+  A black mark at the right shows while the page is well inside the hold;
+  only frames with it count.
+
+  ?drive=1 scrolls the page itself with smooth scrollTo, which iOS animates
+  outside the page just as it does a fling; the XCUITest in tests/ios swipes
+  for real.
+-->
+<style>
+  html, body { margin: 0; background: #fff; }
+  .lab-spacer { height: 1400px; }
+  .lab-rail { position: relative; }
+  .lab-mark { position: absolute; top: 0; width: 60px; height: 100px; }
+  .lab-red { left: 60px; background: #f00; }
+  .lab-blue { left: 160px; background: #00f; }
+  /* the browser's own pin: sticky inside a rail as long as the hold */
+  .lab-sticky-rail { position: absolute; top: 0; left: 260px; width: 60px; }
+  .lab-orange { position: sticky; top: 100px; width: 60px; height: 100px; background: #ff8c00; }
+  .lab-green { position: fixed; top: 100px; left: 0; width: 30px; height: 100px; background: #0c0; z-index: 2; }
+  .lab-tail { height: 2000px; }
+  /* shown only well inside the hold, so the measurement counts no frame where a mark is meant to be elsewhere */
+  .lab-gate { position: fixed; top: 100px; right: 0; width: 30px; height: 100px; background: #000; z-index: 2; visibility: hidden; }
+  .lab-gate.is-on { visibility: visible; }
+  /* ruled lines, so the page visibly scrolls in the recording */
+  body { background-image: repeating-linear-gradient(#fff 0 190px, #ddd 190px 200px); }
+  .lab-status { position: fixed; bottom: 0; left: 0; right: 0; font: 14px/1.4 -apple-system, sans-serif; background: #fff; padding: 8px; z-index: 3; }
+  @keyframes lab-hold { from { transform: translateY(0); } to { transform: translateY(var(--lab-distance)); } }
+  .lab-blue.is-timeline { animation: lab-hold linear both; animation-timeline: scroll(root); animation-range: var(--lab-start) var(--lab-end); }
+</style>
+</head>
+<body>
+<div class="lab-green"></div>
+<div class="lab-gate"></div>
+<div class="lab-spacer"></div>
+<div class="lab-rail">
+  <div class="lab-mark lab-red"></div>
+  <div class="lab-mark lab-blue"></div>
+  <div class="lab-sticky-rail"><div class="lab-orange"></div></div>
+</div>
+<div class="lab-tail"></div>
+<div class="lab-status">loading</div>
+<script src="../../dist/scrollwork.min.js" data-auto></script>
+<script>
+{
+  const status = document.querySelector('.lab-status');
+  const blue = document.querySelector('.lab-blue');
+  const supports = typeof CSS !== 'undefined' && CSS.supports('animation-timeline: scroll()');
+  // ?hold=<px> how long the marks hold (a fast fling needs room); ?at=mid starts in the middle of it
+  const params = new URLSearchParams(location.search);
+  const hold = Number(params.get('hold') || 3000);
+  document.querySelector('.lab-rail').style.height = hold + 200 + 'px';
+  document.querySelector('.lab-sticky-rail').style.height = hold + 100 + 'px';
+  // set before data-auto reads the page, which waits for DOMContentLoaded
+  document.querySelector('.lab-red').setAttribute('data-scrollwork', JSON.stringify({ pin: { distance: hold, top: 100 } }));
+  const say = (msg) => {
+    status.textContent = msg;
+    fetch('/log', { method: 'POST', body: msg }).catch(() => {});
+  };
+  // the blue mark holds over the same stretch of scrolling as the red one
+  const blueTop = blue.getBoundingClientRect().top + scrollY;
+  const start = blueTop - 100;
+  document.documentElement.style.setProperty('--lab-start', start + 'px');
+  document.documentElement.style.setProperty('--lab-end', start + hold + 'px');
+  document.documentElement.style.setProperty('--lab-distance', hold + 'px');
+  if (supports) blue.classList.add('is-timeline');
+  const gate = document.querySelector('.lab-gate');
+  const tick = () => {
+    gate.classList.toggle('is-on', scrollY > start + 150 && scrollY < start + hold - 150);
+    requestAnimationFrame(tick);
+  };
+  tick();
+  // the viewport as the page sees it, whenever scrolling settles: Safari's toolbar collapses and returns
+  let settle;
+  addEventListener('scroll', () => {
+    clearTimeout(settle);
+    settle = setTimeout(() => say(`settled y=${Math.round(scrollY)} inner=${innerHeight} vv=${Math.round(visualViewport.height)} client=${document.documentElement.clientHeight} max=${document.documentElement.scrollHeight - document.documentElement.clientHeight} blue=${Math.round(blue.getBoundingClientRect().top)} red=${Math.round(document.querySelector('.lab-red').getBoundingClientRect().top)}`), 400);
+  });
+  say(`ua=${navigator.userAgent} | scroll-timeline=${supports} | holds from ${start}px to ${start + hold}px`);
+  if (params.get('at') === 'mid') setTimeout(() => scrollTo(0, start + hold / 2), 1200);
+
+  if (new URLSearchParams(location.search).has('drive')) {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    (async () => {
+      await wait(2500);
+      scrollTo(0, start + 200);
+      await wait(1500);
+      for (let i = 0; i < 4; i++) {
+        scrollTo({ top: start + 2600, behavior: 'smooth' });
+        await wait(1800);
+        scrollTo({ top: start + 200, behavior: 'smooth' });
+        await wait(1800);
+      }
+      say('drive done');
+    })();
+  }
+}
+</script>
+</body>
+</html>

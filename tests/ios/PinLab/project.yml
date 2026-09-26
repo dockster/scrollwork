@@ -1,0 +1,36 @@
+# The iOS lab's swipes: a UI test that flings Safari, since nothing else
+# makes the Simulator scroll with real momentum. The host app exists only
+# because a UI test target needs one; the test drives Safari by bundle id.
+#   xcodegen generate && xcodebuild test -scheme PinLabUITests -destination 'platform=iOS Simulator,name=<device>'
+name: PinLab
+options:
+  bundleIdPrefix: dev.scrollwork.lab
+  deploymentTarget:
+    iOS: "18.0"
+targets:
+  PinLabHost:
+    type: application
+    platform: iOS
+    sources: [Host]
+    info:
+      path: Host/Info.plist
+      properties:
+        UILaunchScreen: {}
+    settings:
+      CODE_SIGNING_ALLOWED: NO
+  PinLabUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [UITests]
+    dependencies:
+      - target: PinLabHost
+    settings:
+      CODE_SIGNING_ALLOWED: NO
+schemes:
+  PinLabUITests:
+    build:
+      targets:
+        PinLabHost: all
+        PinLabUITests: [test]
+    test:
+      targets: [PinLabUITests]

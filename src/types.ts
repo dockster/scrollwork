@@ -171,6 +171,13 @@ export interface MotionOptions {
   seekOnly?: boolean;
   /** warn in the console about a spec it cannot fully read (default true) */
   warn?: boolean;
+  /**
+   * pin with position: sticky where the layout allows, so iOS moves pins with
+   * its own scroll instead of a frame late. The element is moved into a track
+   * of its own while it plays, so leave this off on a page a framework renders
+   * (React, Vue): it would find the element gone from where it put it. Off by default
+   */
+  sticky?: boolean;
   /** with smooth scrolling, keep sideways swipes from reaching the browser (which may read them as "back"); off by default */
   holdSideways?: boolean;
   navigate?: (target: string, ix?: Interaction) => void;

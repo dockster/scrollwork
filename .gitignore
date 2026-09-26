@@ -5,3 +5,6 @@ dist
 test-results
 tests/.cache
 release
+tests/ios/PinLab/*.xcodeproj
+tests/ios/PinLab/Host/Info.plist
+tests/ios/PinLab/build

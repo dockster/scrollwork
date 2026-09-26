@@ -52,7 +52,12 @@ serve it yourself.
 With `data-auto`, Scrollwork plays the page once it has loaded, and keeps the
 control on `window.scrollwork` (`replay()`, `stop()`). Without it, call
 `Scrollwork.auto()` yourself. Put `data-scrollwork-smooth` on `<html>` to make
-wheel scrolling smooth.
+wheel scrolling smooth, and `data-scrollwork-sticky` to pin with
+`position: sticky` where the layout allows, so pins stay put during iOS
+momentum scrolling. Sticky moves each pinned element into a track of its own
+while it plays, so leave it off on pages a framework such as React or Vue
+renders; there, pins move by script as before (`sticky: true` is the same
+choice from code).
 
 ### Avoid a flash
 
@@ -164,8 +169,8 @@ focus shows hover styles without `:focus-visible`, and the mask effect uses
 `overflow: hidden` where `overflow: clip` is not supported. Versions that old
 are not in the test runs.
 
-Known limits in 1.0: pinned and parallax elements are moved by script after
-the browser scrolls, so iOS momentum scrolling may show a slight lag;
+Known limits: parallax, and pins without `data-scrollwork-sticky`, are moved
+by script after the browser scrolls, so iOS momentum scrolling may show a lag;
 and an element that `auto()` or `start()` takes over begins from
 its author's look, so the end state of an earlier `animate()` on it is not
 kept once the engine stops.

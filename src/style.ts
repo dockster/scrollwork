@@ -78,7 +78,7 @@ export const NONE: Base = { t: [], s: [], rot: 0, opacity: 1, filter: '', inline
  * value no longer matches what was written was changed by the page since,
  * and that is the author's value from then on.
  */
-type Held = HTMLElement & { __scrollwork?: Inline; __scrollworkPaint?: Inline; __scrollworkHolds?: number };
+type Held = HTMLElement & { __scrollwork?: Inline; __scrollworkPaint?: Inline; __scrollworkHolds?: number; __scrollworkBare?: boolean };
 const KEYS = ['translate', 'scale', 'rotate', 'opacity', 'filter', 'clipPath'] as const;
 const current = (el: HTMLElement): Inline => ({ translate: el.style.translate, scale: el.style.scale, rotate: el.style.rotate, opacity: el.style.opacity, filter: el.style.filter, clipPath: el.style.clipPath });
 
@@ -113,8 +113,11 @@ export function readBase(el: HTMLElement): Base {
   const held = el as Held;
   const now = current(el);
   let inline: Inline;
-  if (!held.__scrollwork) inline = now;
-  else {
+  if (!held.__scrollwork) {
+    inline = now;
+    // no style attribute before any motion: none after it either, not an empty one
+    held.__scrollworkBare = !el.hasAttribute('style');
+  } else {
     // kept from before, except where the page has written since
     inline = { ...held.__scrollwork };
     const painted = held.__scrollworkPaint;
@@ -158,9 +161,11 @@ export function release(el: HTMLElement, inline: Inline, holding = true) {
   write(el, inline);
   if (holding) held.__scrollworkHolds = Math.max(0, (held.__scrollworkHolds || 0) - 1);
   if (!held.__scrollworkHolds) {
+    if (held.__scrollworkBare && el.getAttribute('style') === '') el.removeAttribute('style');
     delete held.__scrollwork;
     delete held.__scrollworkPaint;
     delete held.__scrollworkHolds;
+    delete held.__scrollworkBare;
   }
 }
 

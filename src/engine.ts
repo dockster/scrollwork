@@ -185,11 +185,13 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
     for (let e: HTMLElement | null = el; e; e = e.offsetParent as HTMLElement | null) t += e.offsetTop;
     return t;
   };
+  /** elements pinned with position: sticky; their offsetTop includes the hold, their place in the track is 0 */
+  const stuck = new Set<HTMLElement>();
   const layoutTop = (el: HTMLElement) => {
     let t = 0;
     let e: HTMLElement | null = el;
     while (e && e !== stopAt) {
-      t += e.offsetTop;
+      t += stuck.has(e) ? 0 : e.offsetTop;
       e = e.offsetParent as HTMLElement | null;
     }
     // A scroller that is not positioned is never anyone's offsetParent: the
@@ -242,6 +244,261 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
     }
   }
 
+
+  // ── pin with position: sticky, where the page allows it ──
+  // iOS scrolls on a thread of its own and runs the page's code after it, so
+  // a pin moved by script trails a fling by up to ~185px (tests/ios); a sticky
+  // element is moved by the browser, with the scroll. It needs a containing
+  // block as tall as itself plus the hold, so the element goes into a track of
+  // that height, and the track takes its place: in the flow, a footprint of
+  // its size and margins holds it; positioned absolutely, the track sits where
+  // it was. The pin must not change how the page looks, so the layout and the
+  // computed style of the element, everything in it and everything beside it
+  // are read before and after, and anything different puts the element back
+  // and pins it with the transform, as before.
+  interface StickyPin {
+    e: Entry;
+    track: HTMLElement;
+    /** in the flow: the box that keeps the element's place; positioned: null */
+    foot: HTMLElement | null;
+    /** the element's inline values for what the pin writes, to put back */
+    saved: Array<[string, string, string]>;
+    /** its style attribute as written, to write back word for word when it means the same again */
+    attr: string | null;
+  }
+  const stickies = new Map<Entry, StickyPin>();
+  /** watches the page for changes (set up with the loop); declared here, since measure() reads it first */
+  let mo: MutationObserver | null = null;
+  const PIN_PROPS = ['position', 'top', 'right', 'bottom', 'left', 'margin-top', 'margin-right', 'margin-bottom', 'margin-left', 'pointer-events'];
+  /** what the pin writes on the element, left out when comparing its style */
+  const PINNED_OWN = /^(position|top|right|bottom|left|inset|margin|pointer-events)/;
+  const FLOWING = /^(block|flow-root|flex|grid|list-item|table)$/;
+  const BLOCK_PARENT = /^(block|flow-root|list-item)$/;
+  const doc = root.ownerDocument;
+  const cssOf = (n: Element) => win.getComputedStyle(n);
+  const styleKey = (n: Element, own: boolean) => {
+    const cs = cssOf(n);
+    let out = '';
+    for (let i = 0; i < cs.length; i++) {
+      const k = cs[i];
+      if (own && PINNED_OWN.test(k)) continue;
+      out += k + ':' + cs.getPropertyValue(k) + ';';
+    }
+    return out;
+  };
+  const box = (n: Element) => {
+    const r = n.getBoundingClientRect();
+    return [r.left, r.top, r.width, r.height].map((v) => Math.round(v * 2) / 2).join(',');
+  };
+  /** how the page looks around a pinned element: compared before and after it goes into its track */
+  const look = (el: HTMLElement, parent: HTMLElement, host: Element | null) => {
+    const scrolling = scroller || doc.documentElement;
+    const parts = [box(el), box(parent), `${scrolling.scrollWidth}x${scrolling.scrollHeight}`];
+    const inside = el.getElementsByTagName('*');
+    parts.push(styleKey(el, true));
+    for (let i = 0; i < inside.length; i++) parts.push(box(inside[i]), styleKey(inside[i], false));
+    for (const c of Array.from(parent.children)) {
+      if (c === el || c === host) continue;
+      parts.push(box(c), styleKey(c, false));
+    }
+    return parts.join('|');
+  };
+  /**
+   * A box that scrolls (overflow hidden, auto or scroll) would be what sticky
+   * holds against. overflow: clip scrolls nothing: sticky still holds against
+   * the scroller, and the box clips the element as it did before.
+   */
+  const SCROLLS = /^(hidden|auto|scroll)$/;
+  const scrolls = (n: Element) => {
+    const cs = cssOf(n);
+    return SCROLLS.test(cs.overflowX) || SCROLLS.test(cs.overflowY);
+  };
+  const canStick = (e: Entry) => {
+    const el = e.el;
+    if (!opts.sticky || opts.seekOnly || !e.item.pin || !el.parentElement) return false;
+    const cs = cssOf(el);
+    const abs = cs.position === 'absolute';
+    if (!abs && cs.position !== 'static' && cs.position !== 'relative') return false;
+    if (!FLOWING.test(cs.display) || cs.float !== 'none') return false;
+    if (!abs && !BLOCK_PARENT.test(cssOf(el.parentElement).display)) return false;
+    // a frame, a video or a sound would reload or stop when moved into the track
+    if (el.querySelector('iframe, video, audio, object, embed')) return false;
+    // the comparison reads every computed style inside: kept to what a pinned block usually holds
+    if (el.getElementsByTagName('*').length > 300) return false;
+    // a pinned ancestor moves it by transform, which sticky knows nothing of
+    for (let p: HTMLElement | null = el.parentElement; p; p = p.parentElement) {
+      const pe = byEl.get(p);
+      if (pe && pe.item.pin) return false;
+    }
+    // sticky holds against the nearest box that scrolls: it must be the scroller
+    const html = doc.documentElement;
+    for (let p: HTMLElement | null = el.parentElement; p && p !== scroller; p = p.parentElement) {
+      if (p === html) return !scroller;
+      // the body's overflow belongs to the page when the root's is visible
+      if (p === doc.body && !scrolls(html)) continue;
+      if (scrolls(p)) return false;
+    }
+    return true;
+  };
+  const putBack = (el: HTMLElement, saved: StickyPin['saved']) => {
+    for (const [k, v, pr] of saved) {
+      if (v) el.style.setProperty(k, v, pr);
+      else el.style.removeProperty(k);
+    }
+  };
+  /** the track's size and place, from the element as the page lays it out */
+  const fit = (p: StickyPin) => {
+    const el = p.e.el;
+    const hold = p.e.item.pin!.distance;
+    const ts = p.track.style;
+    if (p.foot) {
+      // the page's own margins, read with the pin's zeros taken off for a moment
+      putBack(el, p.saved.filter(([k]) => k === 'margin-top' || k === 'margin-bottom'));
+      const cs = cssOf(el);
+      const mt = cs.marginTop;
+      const mb = cs.marginBottom;
+      el.style.marginTop = '0px';
+      el.style.marginBottom = '0px';
+      const fs = p.foot.style;
+      fs.marginTop = mt;
+      fs.marginBottom = mb;
+      fs.height = el.offsetHeight + 'px';
+      ts.height = el.offsetHeight + hold + 'px';
+      return;
+    }
+    // positioned: laid out by its own rules again, against its containing block, which the track fills for a moment
+    ts.left = ts.top = ts.right = ts.bottom = '0px';
+    ts.width = ts.height = 'auto';
+    putBack(el, p.saved);
+    el.style.position = 'absolute';
+    const x = el.offsetLeft;
+    const y = el.offsetTop;
+    const w = el.offsetWidth;
+    const h = el.offsetHeight;
+    ts.right = ts.bottom = 'auto';
+    ts.left = x + 'px';
+    ts.top = y + 'px';
+    ts.width = w + 'px';
+    ts.height = h + hold + 'px';
+    const es = el.style;
+    es.position = 'sticky';
+    es.top = stickyTop(p.e);
+    es.left = es.right = es.bottom = 'auto';
+    es.margin = '0px';
+  };
+  /**
+   * Sticky's top counts from inside the scroller's padding; the transform's
+   * from its edge (layoutTop measures from the padding edge), so the padding
+   * comes off to hold at the same place.
+   */
+  const stickyTop = (e: Entry) => e.item.pin!.top - (scroller ? parseFloat(cssOf(scroller).paddingTop) || 0 : 0) + 'px';
+  const unstick = (p: StickyPin) => {
+    const el = p.e.el;
+    const host = p.foot || p.track;
+    if (host.parentNode) host.parentNode.insertBefore(el, host);
+    host.remove();
+    putBack(el, p.saved);
+    // the same declarations can be written differently (margin as one or as four):
+    // when what is there now means what was there, what was there comes back as it was
+    const now = el.getAttribute('style');
+    if (now !== p.attr) {
+      const was = doc.createElement('div');
+      was.setAttribute('style', p.attr || '');
+      if (was.style.cssText === el.style.cssText) {
+        if (p.attr === null) el.removeAttribute('style');
+        else el.setAttribute('style', p.attr);
+      }
+    }
+    stuck.delete(el);
+  };
+  const stick = (e: Entry): StickyPin | null => {
+    const el = e.el;
+    const parent = el.parentElement!;
+    const cs = cssOf(el);
+    const abs = cs.position === 'absolute';
+    const attr = el.getAttribute('style');
+    const before = look(el, parent, null);
+    const saved = PIN_PROPS.map((k): [string, string, string] => [k, el.style.getPropertyValue(k), el.style.getPropertyPriority(k)]);
+    const pointer = cs.pointerEvents;
+    const track = doc.createElement('div');
+    track.className = 'ux-motion-track';
+    const ts = track.style;
+    ts.position = 'absolute';
+    ts.margin = ts.padding = '0px';
+    ts.border = '0';
+    // the tall track must not catch the clicks meant for what is under it
+    ts.pointerEvents = 'none';
+    let foot: HTMLElement | null = null;
+    if (abs) {
+      if (cs.zIndex !== 'auto') ts.zIndex = cs.zIndex;
+      ts.left = el.offsetLeft + 'px';
+      ts.top = el.offsetTop + 'px';
+      ts.width = el.offsetWidth + 'px';
+      ts.height = el.offsetHeight + e.item.pin!.distance + 'px';
+      parent.insertBefore(track, el);
+    } else {
+      foot = doc.createElement('div');
+      foot.className = 'ux-motion-pin';
+      const fs = foot.style;
+      fs.display = 'block';
+      fs.position = 'relative';
+      fs.padding = '0px';
+      fs.border = '0';
+      fs.clear = cs.clear;
+      fs.marginTop = cs.marginTop;
+      fs.marginBottom = cs.marginBottom;
+      fs.height = el.offsetHeight + 'px';
+      ts.left = ts.right = ts.top = '0px';
+      ts.height = el.offsetHeight + e.item.pin!.distance + 'px';
+      parent.insertBefore(foot, el);
+      foot.appendChild(track);
+    }
+    track.appendChild(el);
+    const es = el.style;
+    es.position = 'relative';
+    es.top = es.left = es.right = es.bottom = 'auto';
+    if (abs) es.margin = '0px';
+    else {
+      es.marginTop = '0px';
+      es.marginBottom = '0px';
+    }
+    es.pointerEvents = pointer;
+    const p: StickyPin = { e, track, foot, saved, attr };
+    // at rest, in the track, it must look exactly as it did
+    if (look(el, parent, foot || track) !== before) {
+      unstick(p);
+      return null;
+    }
+    es.position = 'sticky';
+    es.top = stickyTop(e);
+    stuck.add(el);
+    return p;
+  };
+  let pinned = false;
+  /**
+   * Pins go into their tracks once; after that the page's rules may have moved
+   * or resized them (a media query), so the track is fitted to them again. The
+   * element is never moved in the page again: moving it would restart its CSS
+   * animations and take the focus from a field being typed in.
+   */
+  const placePins = () => {
+    // fitting moves the element for a moment: the browser must not scroll to follow it
+    const scrolling = scroller || doc.documentElement;
+    const anchor = scrolling.style.overflowAnchor;
+    scrolling.style.overflowAnchor = 'none';
+    if (!pinned) {
+      pinned = true;
+      for (const e of entries) {
+        if (!canStick(e)) continue;
+        const p = stick(e);
+        if (p) stickies.set(e, p);
+      }
+    } else {
+      for (const p of stickies.values()) fit(p);
+    }
+    scrolling.style.overflowAnchor = anchor;
+  };
+
   /** something changed that the next frame must draw (a hover, a click, a re-measure) */
   let dirty = true;
   let moving = true;
@@ -255,6 +512,7 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
   let lastY = -1;
   let lastVh = -1;
   const measure = () => {
+    placePins();
     for (const e of entries) {
       e.top = layoutTop(e.el);
       e.height = e.el.offsetHeight;
@@ -265,6 +523,8 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
       m.top = layoutTop(el);
       m.height = el.offsetHeight;
     }
+    // the pins' own writes are not changes to the page
+    if (mo) mo.takeRecords();
     touch();
   };
   measure();
@@ -326,7 +586,8 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
     for (const e of entries) {
       const it = e.item;
       let own = identity();
-      own.y += e.pinOffset;
+      // a sticky pin is held by the browser; the offset is still counted for what it carries and triggers
+      if (!stuck.has(e.el)) own.y += e.pinOffset;
 
       const sc = it.scroll;
       if (sc && !reduced) {
@@ -502,7 +763,6 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
   };
 
   let ro: ResizeObserver | null = null;
-  let mo: MutationObserver | null = null;
   const surface: EventTarget = scroller || win;
   const unlisten: Array<() => void> = [];
   const on = (el: EventTarget, type: string, fn: (ev: Event) => void, capture = false) => {
@@ -799,6 +1059,9 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
         release(e.el, e.base.inline);
         for (const u of e.units) putInline(u.el, BLANK);
       }
+      // back where they were in the page, once nothing painted is left on them
+      for (const p of stickies.values()) unstick(p);
+      stickies.clear();
       for (const r of restores.splice(0).reverse()) r();
     },
     seek(y: number, height: number) {
