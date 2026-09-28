@@ -83,18 +83,23 @@ The full form, a list:
 
 | Field | Default | |
 |---|---|---|
-| `trigger` | `"none"` | `click`, `drag`, `hover`, `press`, `key`, `mouseenter`, `mouseleave`, `mousedown`, `mouseup`, `delay` |
+| `trigger` | `"none"` | `click`, `drag`, `hover`, `press`, `key`, `mouseenter`, `mouseleave`, `mousedown`, `mouseup`, `delay`, `media-end`, `media-time` |
 | `key` | none | for `key`: the key as `KeyboardEvent.key` (`"k"`, `"ArrowRight"`, `" "`) |
+| `at` | `0` | for `media-time`: the second the video or audio plays past |
 | `delay` | `0` | seconds before the action (kept under reduced motion) |
-| `action.type` | `"none"` | `change` (to `state`), `scroll` (to `target`), `url` (`url`, `newTab`), `navigate` and `swap` (to `target`), `overlay` (below), `back`, `close` |
-| `animation` | `{ "curve": "out", "duration": 0.25 }` | `kind: "instant"` for no motion; `curve: "custom"` with `bezier: [x1, y1, x2, y2]`; press defaults to 0.12 s |
+| `action.type` | `"none"` | `change` (to `state`), `scroll` (to `target`, with an `offset`), `url` (`url`, `newTab`), `navigate` (to `target`, with `preserveScroll`) and `swap` (to `target`), `overlay` (below), `back`, `close`, `custom` (below) |
+| `animation` | `{ "curve": "out", "duration": 0.25 }` | `kind: "instant"` for no motion; `curve: "custom"` with `bezier: [x1, y1, x2, y2]`; `curve: "spring"` with `spring: [stiffness, damping, mass]`; press defaults to 0.12 s |
 
-A `scroll` target is another element's `data-sw-id`. A `navigate`, `swap` or
+A `scroll` target is another element's `data-sw-id`; `offset` stops that many
+pixels above it (the height of a header that stays on top). When the target
+sits in a box that scrolls on its own (`overflow: auto`, a carousel), that box
+scrolls to it rather than the page. A `navigate`, `swap` or
 `overlay` target is whatever your page's `navigate` option understands; with
 `auto()`, a `#hash` or a URL. An `overlay` also takes `position` (`center`,
 the default, `top-left`, `top-center`, `top-right`, `bottom-left`,
-`bottom-center`, `bottom-right`), `closeOnOutside` and `background` (both
-`true` unless set to `false`). A screen change's `animation` can carry a
+`bottom-center`, `bottom-right`, or `manual` with an `offset: { x, y }` from
+the element that opened it), `closeOnOutside` and `background` (both `true`
+unless set to `false`), and a `backdrop` colour. A screen change's `animation` can carry a
 `transition` (`instant`, `dissolve`, `smart`, `move-in`, `move-out`, `push`,
 `slide-in`, `slide-out`) and a `direction` (`left`, `right`, `top`,
 `bottom`); Scrollwork hands the interaction, with them, to your `navigate`,
@@ -105,6 +110,20 @@ as long as they last. `navigate`, `back`, `overlay`, `swap` and `close` call
 the matching option of `start()`; with `auto()`, navigate follows a `#hash` or
 a URL, and back goes back in history. `url` opens only web and mail addresses.
 
+The innermost element with a pointer trigger takes the event: a button's click
+does not also run the click of the card or the page around it. The root itself
+can carry interactions (a whole screen with a key or a delay).
+
+`media-end` and `media-time` listen to a video or audio: the element itself,
+or the first one inside it. `media-time` fires each time playback passes `at`;
+seeking back before it lets it fire again. A looping video never ends.
+
+A `custom` action, `{ "type": "custom", "name": "addToCart", "data": { ... } }`,
+is the page's own: Scrollwork binds its trigger and delay and calls the
+`custom(name, data, interaction, phase)` option, with `phase` `"start"`, and
+`"end"` when a `hover` or `press` that held it stops. Without the option,
+custom actions do nothing.
+
 ## Curves
 
 `smooth` (0.87, 0, 0.13, 1), `out` (0.22, 1, 0.36, 1), `in-out`
@@ -112,6 +131,13 @@ a URL, and back goes back in history. `url` opens only web and mail addresses.
 `linear`, `in` (0.42, 0, 1, 1), `in-back` (0.3, -0.05, 0.7, -0.5) and
 `in-out-back` (0.7, -0.4, 0.4, 1.4). A custom bezier's x values are clamped
 to 0 to 1, as CSS does.
+
+**Springs.** `spring(stiffness, damping, mass)` returns `{ ease, duration }`:
+the curve, and the seconds it takes to settle within a thousandth of the end.
+`SPRINGS` holds Figma's four as `[stiffness, damping, mass]`: `gentle`
+(100, 15, 1), `quick` (300, 20, 1), `bouncy` (600, 15, 1), `slow` (80, 20, 1).
+An interaction plays a spring over its `duration`, so give it the spring's own
+settle time.
 
 ## start(spec, options)
 
@@ -131,5 +157,6 @@ says so.
 | `split` | required | split text |
 | `warn` | `true` | say in the console what could not be read |
 | `navigate`, `back`, `overlay`, `swap`, `close` | none | what the screen actions do |
+| `custom` | none | what the page's own actions do: `(name, data, interaction, phase)` |
 
 `auto(root, options)` takes the same options (all optional), plus `smooth`.

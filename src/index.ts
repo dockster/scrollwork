@@ -24,6 +24,6 @@ export { readPage, readSpec };
 export { animate, type AnimateOptions, type Controls, type Keyframes, type Targets, type Value } from './animate.js';
 export { inView, type InViewOptions } from './inview.js';
 export { scroll, type ScrollOptions, type ScrollHandler } from './scroll.js';
-export { bezier, CURVES, EASES, easeOf, type EaseFn, type EaseInput } from './easing.js';
+export { bezier, CURVES, EASES, easeOf, spring, SPRINGS, type EaseFn, type EaseInput } from './easing.js';
 export type { AutoOptions } from './auto.js';
 export * from './types.js';

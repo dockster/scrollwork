@@ -8,7 +8,7 @@
 // plus opacity, a blur filter and a clip-path mask. stop() gives every element
 // back exactly as it was.
 
-import { bezier, clamp01, EASES } from './easing.js';
+import { bezier, clamp01, EASES, spring } from './easing.js';
 import { combine, identity, mix, NONE, paint, putInline, BLANK, readBase, release, type Base, type State } from './style.js';
 import type { AppearMotion, Interaction, InteractionAnimation, MotionControl, MotionItem, MotionKey, MotionOptions, MotionSpec, MotionState } from './types.js';
 
@@ -35,7 +35,12 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
   const win = root.ownerDocument.defaultView || window;
   // read live where the page asked for it: a reader who turns reduced motion on mid-visit gets it at once
   let reduced = opts.reduced;
-  const find = (id: string | undefined) => (id ? (root.querySelector('[' + opts.attr + '="' + id.replace(/["\\]/g, '') + '"]') as HTMLElement | null) : null);
+  // the root itself counts: a screen (the root, in a prototype) has interactions of its own
+  const find = (id: string | undefined) => {
+    if (!id) return null;
+    const sel = '[' + opts.attr + '="' + id.replace(/["\\]/g, '') + '"]';
+    return root.matches(sel) ? root : (root.querySelector(sel) as HTMLElement | null);
+  };
 
   const asState = (m: MotionState): State => ({ ...identity(), ...m, yp: 0, clip: 0 });
   /** a timeline of stops at 0-100%: the state `k` (0-1) of the way along, each step eased on its own */
@@ -562,7 +567,14 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
     return e ? e.height : o ? o.height : el.offsetHeight;
   };
 
-  const curveOf = (a: InteractionAnimation) => (a.curve === 'custom' ? (a.bezier ? bezier(a.bezier[0], a.bezier[1], a.bezier[2], a.bezier[3]) : EASES.out) : EASES[a.curve] || EASES.out);
+  const curveOf = (a: InteractionAnimation) =>
+    a.curve === 'spring' && a.spring
+      ? spring(a.spring[0], a.spring[1], a.spring[2]).ease
+      : a.curve === 'custom'
+        ? a.bezier
+          ? bezier(a.bezier[0], a.bezier[1], a.bezier[2], a.bezier[3])
+          : EASES.out
+        : EASES[a.curve as keyof typeof EASES] || EASES.out;
 
   /** hover and click move toward their target at a rate set by their duration */
   const approach = (p: number, to: number, duration: number, dt: number) => {
@@ -805,12 +817,66 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
      * when a "while" trigger (hovering, pressing) stops. A delay trigger
      * starts once, now; the interaction's own delay is applied by the caller.
      */
+    /**
+     * The innermost hotspot has a pointer event, as in Figma: a button's click
+     * does not also run the click of the card or the screen around it. The
+     * first element to take an event claims it; the layers it bubbles through
+     * after that leave it be (the same element may take it more than once).
+     */
+    const claimed = new WeakMap<Event, HTMLElement>();
+    const claim = (ev: Event, el: HTMLElement) => {
+      const by = claimed.get(ev);
+      if (by && by !== el) return false;
+      claimed.set(ev, el);
+      return true;
+    };
+    /** the nearest element between `el` and the page's scroller that scrolls on its own, with something to scroll */
+    const scrollBoxOf = (el: HTMLElement): HTMLElement | null => {
+      for (let n = el.parentElement; n && n !== root && n !== scroller && n !== doc.body && n !== doc.documentElement; n = n.parentElement) {
+        const cs = win.getComputedStyle(n);
+        const x = /(auto|scroll)/.test(cs.overflowX) && n.scrollWidth > n.clientWidth + 1;
+        const y = /(auto|scroll)/.test(cs.overflowY) && n.scrollHeight > n.clientHeight + 1;
+        if (x || y) return n;
+      }
+      return null;
+    };
+    /** scroll a box so `to` sits at its start (less the offset), along the interaction's curve */
+    const glideBox = (box: HTMLElement, to: HTMLElement, ms: number, ease: (t: number) => number, offset: number) => {
+      const b = box.getBoundingClientRect();
+      const t = to.getBoundingClientRect();
+      // the page may be zoomed (a preview): the box's own pixels
+      const k = b.width ? box.clientWidth / b.width : 1;
+      const cs = win.getComputedStyle(box);
+      const endX = /(auto|scroll)/.test(cs.overflowX) ? Math.max(0, Math.min(box.scrollWidth - box.clientWidth, box.scrollLeft + (t.left - b.left) * k - offset)) : box.scrollLeft;
+      const endY = /(auto|scroll)/.test(cs.overflowY) ? Math.max(0, Math.min(box.scrollHeight - box.clientHeight, box.scrollTop + (t.top - b.top) * k - offset)) : box.scrollTop;
+      const x0 = box.scrollLeft;
+      const y0 = box.scrollTop;
+      // the box's own smooth scrolling would fight the curve: off while this plays
+      const was = box.style.scrollBehavior;
+      box.style.scrollBehavior = 'auto';
+      if (!ms) {
+        box.scrollTo(endX, endY);
+        box.style.scrollBehavior = was;
+        return;
+      }
+      const t0 = win.performance.now();
+      const step = (now: number) => {
+        const p = Math.min(1, (now - t0) / ms);
+        const e = ease(p);
+        box.scrollTo(x0 + (endX - x0) * e, y0 + (endY - y0) * e);
+        if (p < 1) win.requestAnimationFrame(step);
+        else box.style.scrollBehavior = was;
+      };
+      win.requestAnimationFrame(step);
+    };
+
     const bind = (el: HTMLElement, ix: Interaction, start: () => void, end?: () => void) => {
       switch (ix.trigger) {
         case 'click': {
           const act = ix.action.type;
           const goes = act === 'navigate' || act === 'url' || act === 'back' || act === 'overlay' || act === 'swap' || act === 'close';
           on(el, 'click', (ev) => {
+            if (!claim(ev, el)) return;
             // a real link that goes somewhere: the runtime takes it (with its
             // delay), and the address stays for anyone without script
             if (goes && el.tagName === 'A' && el.hasAttribute('href')) ev.preventDefault();
@@ -834,6 +900,7 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
           // a press that moves past a few pixels is a drag: it starts once per press
           let from: { x: number; y: number } | null = null;
           on(el, 'pointerdown', (ev) => {
+            if (!claim(ev, el)) return;
             const p = ev as PointerEvent;
             from = { x: p.clientX, y: p.clientY };
           });
@@ -863,7 +930,7 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
           on(el, 'blur', () => end && end());
           break;
         case 'press':
-          on(el, 'pointerdown', start);
+          on(el, 'pointerdown', (ev) => claim(ev, el) && start());
           for (const t of ['pointerup', 'pointercancel', 'pointerleave', 'keyup', 'blur']) on(el, t, () => end && end());
           on(el, 'keydown', (ev) => {
             const k = (ev as KeyboardEvent).key;
@@ -877,10 +944,10 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
           on(el, 'pointerleave', start);
           break;
         case 'mousedown':
-          on(el, 'pointerdown', start);
+          on(el, 'pointerdown', (ev) => claim(ev, el) && start());
           break;
         case 'mouseup':
-          on(el, 'pointerup', start);
+          on(el, 'pointerup', (ev) => claim(ev, el) && start());
           break;
         case 'key': {
           const want = (ix.key || '').toLowerCase();
@@ -900,6 +967,28 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
           // from the moment the screen shows
           start();
           break;
+        case 'media-end':
+        case 'media-time': {
+          // the element's own video or audio, or the first one inside it
+          const media = (el instanceof win.HTMLMediaElement ? el : el.querySelector('video, audio')) as HTMLMediaElement | null;
+          if (!media) break;
+          if (ix.trigger === 'media-end') {
+            on(media, 'ended', start);
+            break;
+          }
+          // plays past the moment: once each time it does (seeking back before it lets it happen again)
+          const at = ix.at || 0;
+          let before = media.currentTime;
+          on(media, 'timeupdate', () => {
+            const now = media.currentTime;
+            if (before < at && now >= at) start();
+            before = now;
+          });
+          on(media, 'seeked', () => {
+            before = media.currentTime;
+          });
+          break;
+        }
       }
     };
 
@@ -947,6 +1036,8 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
           } else if (act.type === 'close') {
             if (opts.close) opts.close(ix);
             else if (opts.back) opts.back(ix);
+          } else if (act.type === 'custom') {
+            if (opts.custom) opts.custom(act.name, act.data, ix, 'start');
           } else if (act.type === 'url') {
             // only web and mail addresses: the document check refuses anything that runs
             if (!/^(https?:\/\/|mailto:)/i.test(act.url)) return;
@@ -955,7 +1046,13 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
           } else if (act.type === 'scroll') {
             const to = find(act.targetId);
             if (!to) return;
-            const y = Math.min(maxY(), Math.max(0, layoutTop(to)));
+            // inside a box that scrolls on its own (a carousel, a row of chips): that box scrolls to it, not the page
+            const box = scrollBoxOf(to);
+            if (box) {
+              glideBox(box, to, ix.animation.kind === 'instant' || reduced ? 0 : ix.animation.duration * 1000, curveOf(ix.animation), act.offset || 0);
+              return;
+            }
+            const y = Math.min(maxY(), Math.max(0, layoutTop(to) - (act.offset || 0)));
             const ms = ix.animation.kind === 'instant' || reduced ? 0 : ix.animation.duration * 1000;
             gliding = false;
             if (!ms) {
@@ -981,7 +1078,14 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
                 timer = 0;
                 if (opts.close) opts.close({ ...ix, action: { type: 'close' } });
               }
-            : undefined
+            : // a custom action held by hovering or pressing hears when that stops, to undo itself
+              hold && act.type === 'custom'
+              ? () => {
+                  cancel(timer);
+                  timer = 0;
+                  if (opts.custom) opts.custom(act.name, act.data, ix, 'end');
+                }
+              : undefined
         );
       }
     }

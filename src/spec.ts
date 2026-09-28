@@ -10,8 +10,8 @@ export const EASES: readonly MotionEase[] = ['smooth', 'out', 'in-out', 'expo', 
 const EFFECTS = ['fade', 'slide-up', 'mask', 'blur', 'scale', 'custom'] as const;
 const SPLITS = ['none', 'lines', 'words', 'chars'] as const;
 const RANGES = ['through', 'in', 'out'] as const;
-const TRIGGERS = ['none', 'click', 'drag', 'hover', 'press', 'key', 'mouseenter', 'mouseleave', 'mousedown', 'mouseup', 'delay'] as const;
-const ACTIONS = ['none', 'navigate', 'change', 'back', 'scroll', 'url', 'overlay', 'swap', 'close'] as const;
+const TRIGGERS = ['none', 'click', 'drag', 'hover', 'press', 'key', 'mouseenter', 'mouseleave', 'mousedown', 'mouseup', 'delay', 'media-end', 'media-time'] as const;
+const ACTIONS = ['none', 'navigate', 'change', 'back', 'scroll', 'url', 'overlay', 'swap', 'close', 'custom'] as const;
 
 type Loose = Record<string, unknown>;
 const isObj = (v: unknown): v is Loose => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -122,8 +122,14 @@ export function readPin(v: unknown, notes: Notes, what: string): PinMotion | und
 
 export function readAnimation(v: unknown, notes: Notes, what: string, duration = 0.25): InteractionAnimation {
   const a = isObj(v) ? v : {};
-  const curve = a.curve === 'custom' ? 'custom' : oneOf(a.curve, EASES, 'out', notes, what + '.curve');
+  const curve = a.curve === 'custom' || a.curve === 'spring' ? a.curve : oneOf(a.curve, EASES, 'out', notes, what + '.curve');
   let bezier: InteractionAnimation['bezier'];
+  let springOf: InteractionAnimation['spring'];
+  if (curve === 'spring') {
+    const s = a.spring;
+    if (Array.isArray(s) && s.length === 3 && s.every((n) => typeof n === 'number' && Number.isFinite(n) && n > 0)) springOf = [s[0], s[1], s[2]];
+    else notes.add(`${what}.spring: a spring needs [stiffness, damping, mass]; using out`);
+  }
   if (curve === 'custom') {
     const b = a.bezier;
     if (Array.isArray(b) && b.length === 4 && b.every((n) => typeof n === 'number' && Number.isFinite(n))) bezier = [b[0], b[1], b[2], b[3]];
@@ -131,8 +137,9 @@ export function readAnimation(v: unknown, notes: Notes, what: string, duration =
   }
   return {
     kind: a.kind === 'instant' ? 'instant' : 'animate',
-    curve: curve === 'custom' && !bezier ? 'out' : curve,
+    curve: (curve === 'custom' && !bezier) || (curve === 'spring' && !springOf) ? 'out' : curve,
     ...(bezier ? { bezier } : {}),
+    ...(springOf ? { spring: springOf } : {}),
     duration: num(a.duration, duration, notes, what + '.duration', 0),
     ...(typeof a.transition === 'string' ? { transition: a.transition as InteractionAnimation['transition'] } : {}),
     ...(typeof a.direction === 'string' ? { direction: a.direction as InteractionAnimation['direction'] } : {}),
@@ -154,17 +161,31 @@ export function readInteraction(v: unknown, notes: Notes, what: string, i: numbe
       action = { type, state: state(act.state, notes, what + '.action.state') };
       break;
     case 'navigate':
+      action = { type, frameId: str('frameId') || str('target'), ...(act.preserveScroll === true ? { preserveScroll: true } : {}) };
+      break;
     case 'swap':
       action = { type, frameId: str('frameId') || str('target') };
       break;
     case 'overlay':
-      action = { type, frameId: str('frameId') || str('target'), position: (str('position') || 'center') as never, closeOnOutside: act.closeOnOutside !== false, background: act.background !== false };
+      action = {
+        type,
+        frameId: str('frameId') || str('target'),
+        position: (str('position') || 'center') as never,
+        closeOnOutside: act.closeOnOutside !== false,
+        background: act.background !== false,
+        ...(isObj(act.offset) && typeof act.offset.x === 'number' && typeof act.offset.y === 'number' ? { offset: { x: act.offset.x, y: act.offset.y } } : {}),
+        ...(typeof act.backdrop === 'string' ? { backdrop: act.backdrop } : {}),
+      };
       break;
     case 'scroll':
-      action = { type, targetId: str('targetId') || str('target') };
+      action = { type, targetId: str('targetId') || str('target'), ...(typeof act.offset === 'number' && Number.isFinite(act.offset) ? { offset: act.offset } : {}) };
       break;
     case 'url':
       action = { type, url: str('url'), newTab: !!act.newTab };
+      break;
+    case 'custom':
+      // the page's own action: its name, and whatever it carries, passed through as written
+      action = { type, name: str('name'), ...(act.data !== undefined ? { data: act.data } : {}) };
       break;
     default:
       action = { type } as Interaction['action'];
@@ -173,6 +194,7 @@ export function readInteraction(v: unknown, notes: Notes, what: string, i: numbe
     id: typeof v.id === 'string' ? v.id : `ix${i}`,
     trigger,
     ...(typeof v.key === 'string' ? { key: v.key } : {}),
+    ...(typeof v.at === 'number' && Number.isFinite(v.at) && v.at >= 0 ? { at: v.at } : {}),
     delay: num(v.delay, 0, notes, what + '.delay', 0),
     action,
     animation: readAnimation(v.animation, notes, what + '.animation', trigger === 'press' ? 0.12 : 0.25),

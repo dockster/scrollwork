@@ -100,3 +100,23 @@ test('an appear that is neither is said, and the defaults are used', () => {
   assert.equal(value.items[0].appear.effect, 'slide-up');
   assert.match(out, /expected an object like/);
 });
+
+test('a custom action keeps its name and data as written, for the page', async () => {
+  const { readInteraction } = await load('spec');
+  const notes = new Set();
+  const ix = readInteraction({ trigger: 'click', action: { type: 'custom', name: 'set-variable', data: { variableId: 'v1', value: { lit: 2 } } } }, notes, 'a', 0);
+  assert.equal(ix.action.type, 'custom');
+  assert.equal(ix.action.name, 'set-variable');
+  assert.deepEqual(ix.action.data, { variableId: 'v1', value: { lit: 2 } });
+});
+
+test('scroll offset, preserve scroll, and a manual overlay with its backdrop are kept', async () => {
+  const { readInteraction } = await load('spec');
+  const notes = new Set();
+  const s = readInteraction({ trigger: 'click', action: { type: 'scroll', target: 'x', offset: 80 } }, notes, 'a', 0);
+  assert.equal(s.action.offset, 80);
+  const n = readInteraction({ trigger: 'click', action: { type: 'navigate', target: 'b.html', preserveScroll: true } }, notes, 'b', 0);
+  assert.equal(n.action.preserveScroll, true);
+  const o = readInteraction({ trigger: 'click', action: { type: 'overlay', target: 'm', position: 'manual', offset: { x: 0, y: 60 }, backdrop: '#FF000080' } }, notes, 'c', 0);
+  assert.deepEqual([o.action.position, o.action.offset, o.action.backdrop], ['manual', { x: 0, y: 60 }, '#FF000080']);
+});

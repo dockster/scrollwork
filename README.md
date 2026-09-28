@@ -108,7 +108,7 @@ defaults, is in [docs/REFERENCE.md](docs/REFERENCE.md).
 | `scroll` | Follows the scroll position: parallax (`speed`), or `from` and `to` states scrubbed across the element's passage. |
 | `pin` | Holds the element in place for a stretch of scrolling. |
 | `hover`, `press` | A state to move to while hovered (or focused by keyboard) or pressed. |
-| `interactions` | The full list: click, key, delay and more, changing state or scrolling to an element. |
+| `interactions` | The full list: click, key, delay, a video ending and more, changing state, scrolling to an element, or calling your own `custom` action. |
 
 A **state** is `{ x, y, scale, rotate, opacity, blur }`, in px, a multiple,
 degrees, 0 to 1 and px. It is relative to the element as your CSS draws it.
@@ -127,6 +127,7 @@ quiet it.
 | `inView(targets, onEnter, options?)` | stop function | Run `onEnter(el)` on arrival; return a function to run on leaving |
 | `scroll(handler, options?)` | stop function | Call `handler(progress)` or scrub an animation as the page scrolls |
 | `easeOf(ease)` | `(t) => number` | Any curve as a function |
+| `spring(stiffness, damping, mass)` | `{ ease, duration }` | A spring as a curve, and how long it takes to settle; `SPRINGS` has Figma's four |
 
 A **control** (`auto`, `start`) has `stop()`, which gives every element back
 exactly as it was, and `replay()`.
@@ -139,8 +140,8 @@ exactly as it was, and `replay()`.
 (`'user'`, `'always'`, `'never'`), `onUpdate(progress)` and `onComplete()`.
 
 **Curves**: `smooth`, `out`, `in-out`, `expo`, `back`, `linear`, `in`,
-`in-back`, `in-out-back`, a cubic bezier `[x1, y1, x2, y2]`, or your own
-function.
+`in-back`, `in-out-back`, a cubic bezier `[x1, y1, x2, y2]`, a spring
+(`spring(600, 15, 1).ease`), or your own function.
 
 ## Accessibility
 

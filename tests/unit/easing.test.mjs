@@ -55,3 +55,34 @@ test('easeOf takes a name, points or a function, and falls back to out', () => {
   assert.equal(easeOf('nope')(0.5), EASES.out(0.5));
   assert.deepEqual(Object.keys(CURVES).sort(), Object.keys(EASES).filter((k) => k !== 'linear').sort());
 });
+
+test('springs: every Figma preset starts at rest at 0, ends at 1, and settles in under two seconds', async () => {
+  const { spring, SPRINGS } = await load('easing');
+  for (const [name, [k, c, m]] of Object.entries(SPRINGS)) {
+    const s = spring(k, c, m);
+    assert.equal(s.ease(0), 0, name);
+    assert.equal(s.ease(1), 1, name);
+    assert.ok(s.duration > 0.1 && s.duration < 2, `${name} settles in ${s.duration}s`);
+  }
+});
+
+test('springs: bouncy goes past the end before it settles, slow does not', async () => {
+  const { spring, SPRINGS } = await load('easing');
+  const peak = (s) => Math.max(...Array.from({ length: 200 }, (_, i) => s.ease(i / 199)));
+  assert.ok(peak(spring(...SPRINGS.bouncy)) > 1.05, 'bouncy overshoots');
+  assert.ok(peak(spring(...SPRINGS.slow)) <= 1.02, 'slow barely does');
+});
+
+test('springs are worked out once per set of numbers', async () => {
+  const { spring } = await load('easing');
+  assert.equal(spring(300, 20, 1), spring(300, 20, 1));
+});
+
+test('an interaction may ask for a spring, and a bad one falls back to out with a note', async () => {
+  const { readAnimation } = await load('spec');
+  const notes = new Set();
+  assert.deepEqual(readAnimation({ curve: 'spring', spring: [600, 15, 1], duration: 0.5 }, notes, 'a').spring, [600, 15, 1]);
+  const bad = readAnimation({ curve: 'spring', spring: [600] }, notes, 'b');
+  assert.equal(bad.curve, 'out');
+  assert.ok([...notes].some((n) => n.includes('spring')));
+});

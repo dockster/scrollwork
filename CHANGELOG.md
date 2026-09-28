@@ -1,6 +1,31 @@
 # Changelog
 
-## 1.1.0 (unreleased)
+## 1.2.0 (2026-09-28)
+
+The first version on npm: it carries 1.1.0 below, which was tagged but not
+published.
+
+- A page's own actions: an interaction can say `{"type": "custom", "name": ..., "data": ...}`,
+  and Scrollwork binds its trigger and delay and hands `name` and `data` to the
+  `custom` option (with `end` when a hover or press that held it stops). How a
+  design tool plays its variables and conditionals.
+- Springs: `spring(stiffness, damping, mass)` gives a curve and the time it
+  takes to settle, and `SPRINGS` has Figma's four. An interaction's animation
+  can be `{"curve": "spring", "spring": [600, 15, 1]}`.
+- The innermost element with a pointer trigger takes the event: a button's
+  click no longer also runs the click of the card or page around it.
+- The root itself can carry motion and interactions (a whole screen with a
+  key, a delay or a click anywhere).
+- `scroll` to an element inside a box that scrolls on its own (a carousel,
+  `overflow: auto`) scrolls that box to it, along the interaction's curve,
+  rather than the page.
+- `scroll` takes an `offset` (px above the target), `navigate` a
+  `preserveScroll`, and `overlay` an `offset` and a `backdrop` colour, passed
+  to the page's callbacks; `overlay` has a `manual` position.
+- `media-end` and `media-time` triggers: when a video or audio ends, or plays
+  past a moment (`at`, in seconds).
+
+## 1.1.0 (2026-09-26, tagged, not published on its own)
 
 - Pins can be held by `position: sticky`: turn it on with
   `data-scrollwork-sticky` on `<html>` (or `sticky: true` in code). The browser

@@ -85,9 +85,10 @@ export interface PinMotion {
  * key, the pointer entering, leaving, going down or up, or a delay after
  * start. `none` keeps the interaction and does nothing.
  */
-export type InteractionTrigger = 'none' | 'click' | 'drag' | 'hover' | 'press' | 'key' | 'mouseenter' | 'mouseleave' | 'mousedown' | 'mouseup' | 'delay';
+/** `media-end` and `media-time` listen to a video or audio: the element itself, or the first one inside it */
+export type InteractionTrigger = 'none' | 'click' | 'drag' | 'hover' | 'press' | 'key' | 'mouseenter' | 'mouseleave' | 'mousedown' | 'mouseup' | 'delay' | 'media-end' | 'media-time';
 
-export type OverlayPosition = 'center' | 'top-left' | 'top-center' | 'top-right' | 'bottom-left' | 'bottom-center' | 'bottom-right';
+export type OverlayPosition = 'center' | 'top-left' | 'top-center' | 'top-right' | 'bottom-left' | 'bottom-center' | 'bottom-right' | 'manual';
 
 /**
  * What an interaction does. `change` moves the element to a state; the
@@ -97,14 +98,23 @@ export type OverlayPosition = 'center' | 'top-left' | 'top-center' | 'top-right'
  */
 export type InteractionAction =
   | { type: 'none' }
-  | { type: 'navigate'; frameId: string }
+  /** `preserveScroll`: the page's navigate callback is asked to keep the scroll position */
+  | { type: 'navigate'; frameId: string; preserveScroll?: boolean }
   | { type: 'change'; state: MotionState }
   | { type: 'back' }
-  | { type: 'scroll'; targetId: string }
+  /** `offset`: stop this many px above the element (a sticky header's height) */
+  | { type: 'scroll'; targetId: string; offset?: number }
   | { type: 'url'; url: string; newTab: boolean }
-  | { type: 'overlay'; frameId: string; position: OverlayPosition; closeOnOutside: boolean; background: boolean }
+  /** `manual` places it at `offset` from the element that opened it; `backdrop` is the colour behind it */
+  | { type: 'overlay'; frameId: string; position: OverlayPosition; closeOnOutside: boolean; background: boolean; offset?: { x: number; y: number }; backdrop?: string }
   | { type: 'swap'; frameId: string }
-  | { type: 'close' };
+  | { type: 'close' }
+  /**
+   * An action the page defines (a design tool's variables, a cart, a
+   * conditional): Scrollwork binds its trigger and delay, then hands `name`
+   * and `data` to the `custom` option, which does the rest.
+   */
+  | { type: 'custom'; name: string; data?: unknown };
 
 export type TransitionType = 'instant' | 'dissolve' | 'smart' | 'move-in' | 'move-out' | 'push' | 'slide-in' | 'slide-out';
 export type TransitionDirection = 'left' | 'right' | 'top' | 'bottom';
@@ -112,7 +122,9 @@ export type TransitionDirection = 'left' | 'right' | 'top' | 'bottom';
 /** How an interaction moves: instantly, or along a curve (named, or a custom cubic bezier). */
 export interface InteractionAnimation {
   kind: 'instant' | 'animate';
-  curve: MotionEase | 'custom';
+  /** `spring` plays `spring` (stiffness, damping, mass) over `duration`, which should be its settle time (easing.ts spring) */
+  curve: MotionEase | 'custom' | 'spring';
+  spring?: [number, number, number];
   /** custom curve: x1, y1, x2, y2 (x is clamped to 0 to 1, as in CSS) */
   bezier?: [number, number, number, number];
   /** seconds */
@@ -127,6 +139,8 @@ export interface Interaction {
   trigger: InteractionTrigger;
   /** for the key trigger: the key, as KeyboardEvent.key ("ArrowRight", "k", " ") */
   key?: string;
+  /** media-time: the moment, in seconds, the video or audio plays past */
+  at?: number;
   /** seconds before the action starts */
   delay: number;
   action: InteractionAction;
@@ -185,6 +199,12 @@ export interface MotionOptions {
   overlay?: (target: string, ix: Interaction) => void;
   swap?: (target: string, ix: Interaction) => void;
   close?: (ix: Interaction) => void;
+  /**
+   * A custom action's trigger fired (`start`): do what `name` says. Held by
+   * hovering or pressing, it hears `end` when that stops, to undo itself.
+   * Without this option, custom actions do nothing.
+   */
+  custom?: (name: string, data: unknown, ix: Interaction, phase: 'start' | 'end') => void;
 }
 
 export interface MotionControl {
