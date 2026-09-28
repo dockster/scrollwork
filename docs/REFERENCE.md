@@ -132,6 +132,17 @@ custom actions do nothing.
 `in-out-back` (0.7, -0.4, 0.4, 1.4). A custom bezier's x values are clamped
 to 0 to 1, as CSS does.
 
+**easings.net.** The thirty curves of [easings.net](https://easings.net), named
+as there in kebab case: `ease-in-sine`, `ease-out-quart`, `ease-in-out-bounce`.
+Ten families (sine, quad, cubic, quart, quint, expo, circ, back, elastic,
+bounce), each `in`, `out` and `in-out`. The first eight are cubic beziers with
+the site's points (`CURVES`); Elastic and Bounce are functions, as the site
+writes them (`DRAWN`). `EASINGS` lists the thirty names in the site's order,
+and `cssEase(name)` gives any named curve as CSS: `cubic-bezier()`, or
+`linear()` through 129 points for Elastic and Bounce. They are accepted
+everywhere a curve is: `appear.ease`, an interaction's `animation.curve`,
+and `animate()`'s `ease`.
+
 **Springs.** `spring(stiffness, damping, mass)` returns `{ ease, duration }`:
 the curve, and the seconds it takes to settle within a thousandth of the end.
 `SPRINGS` holds Figma's four as `[stiffness, damping, mass]`: `gentle`

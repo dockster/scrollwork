@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.3.0 (2026-09-28)
+
+- The thirty curves of easings.net, by name: `ease-in-sine` to
+  `ease-in-out-bounce`, wherever a curve is read (appear, interactions,
+  `animate()`). Twenty four are cubic beziers with the site's points; Elastic
+  and Bounce are the site's functions. `EASINGS` lists the names, `DRAWN`
+  holds Elastic and Bounce, and `cssEase(name)` writes any named curve as CSS
+  (`linear()` for the drawn ones).
+
 ## 1.2.0 (2026-09-28)
 
 The first version on npm: it carries 1.1.0 below, which was tagged but not

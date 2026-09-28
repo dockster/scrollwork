@@ -4,9 +4,10 @@
 // silently doing something else.
 
 import { SPEC_VERSION } from './types.js';
+import { EASINGS } from './easing.js';
 import type { AppearMotion, Interaction, InteractionAnimation, MotionEase, MotionItem, MotionKey, MotionSpec, MotionState, PinMotion, ScrollMotion } from './types.js';
 
-export const EASES: readonly MotionEase[] = ['smooth', 'out', 'in-out', 'expo', 'back', 'linear', 'in', 'in-back', 'in-out-back'];
+export const EASES: readonly MotionEase[] = ['smooth', 'out', 'in-out', 'expo', 'back', 'linear', 'in', 'in-back', 'in-out-back', ...EASINGS];
 const EFFECTS = ['fade', 'slide-up', 'mask', 'blur', 'scale', 'custom'] as const;
 const SPLITS = ['none', 'lines', 'words', 'chars'] as const;
 const RANGES = ['through', 'in', 'out'] as const;

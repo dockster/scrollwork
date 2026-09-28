@@ -20,8 +20,16 @@ export interface MotionState {
   blur: number;
 }
 
-/** Named curves. `smooth` is cubic-bezier(0.87, 0, 0.13, 1); `back` eases out past the end and settles. */
-export type MotionEase = 'smooth' | 'out' | 'in-out' | 'expo' | 'back' | 'linear' | 'in' | 'in-back' | 'in-out-back';
+/** The easing functions of easings.net, by family: `ease-in-sine` to `ease-in-out-bounce`. */
+export type EasingFamily = 'sine' | 'quad' | 'cubic' | 'quart' | 'quint' | 'expo' | 'circ' | 'back' | 'elastic' | 'bounce';
+export type EasingName = `ease-${'in' | 'out' | 'in-out'}-${EasingFamily}`;
+
+/**
+ * Named curves. `smooth` is cubic-bezier(0.87, 0, 0.13, 1); `back` eases out
+ * past the end and settles. The thirty of easings.net are named as there,
+ * `ease-out-quart`, `ease-in-out-bounce`.
+ */
+export type MotionEase = 'smooth' | 'out' | 'in-out' | 'expo' | 'back' | 'linear' | 'in' | 'in-back' | 'in-out-back' | EasingName;
 
 /** A step on a motion's timeline: the state `at` percent of the way (of the duration for appear, of the range for scroll). */
 export interface MotionKey {

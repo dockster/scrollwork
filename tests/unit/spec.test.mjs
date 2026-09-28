@@ -120,3 +120,22 @@ test('scroll offset, preserve scroll, and a manual overlay with its backdrop are
   const o = readInteraction({ trigger: 'click', action: { type: 'overlay', target: 'm', position: 'manual', offset: { x: 0, y: 60 }, backdrop: '#FF000080' } }, notes, 'c', 0);
   assert.deepEqual([o.action.position, o.action.offset, o.action.backdrop], ['manual', { x: 0, y: 60 }, '#FF000080']);
 });
+
+test('an easings.net name is a curve anywhere one is read', async () => {
+  const { readInteraction } = await load('spec');
+  const notes = new Set();
+  const ix = readInteraction({ trigger: 'click', action: { type: 'change', state: { scale: 1.1 } }, animation: { curve: 'ease-out-bounce', duration: 0.5 } }, notes, 'a', 0);
+  assert.equal(ix.animation.curve, 'ease-out-bounce');
+  const { value, out } = said(() => readSpec({ items: [{ id: 'x', appear: { effect: 'fade', ease: 'ease-in-out-elastic' }}] }));
+  assert.equal(value.items[0].appear.ease, 'ease-in-out-elastic');
+  assert.equal(notes.size, 0, [...notes].join());
+  assert.equal(out, '');
+});
+
+test('a made-up easing is refused with a note, and falls back to out', async () => {
+  const { readInteraction } = await load('spec');
+  const notes = new Set();
+  const ix = readInteraction({ trigger: 'click', action: { type: 'back' }, animation: { curve: 'ease-in-wobble' } }, notes, 'a', 0);
+  assert.equal(ix.animation.curve, 'out');
+  assert.ok([...notes].some((n) => n.includes('ease-in-wobble')), [...notes].join());
+});

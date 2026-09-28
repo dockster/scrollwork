@@ -140,8 +140,10 @@ exactly as it was, and `replay()`.
 (`'user'`, `'always'`, `'never'`), `onUpdate(progress)` and `onComplete()`.
 
 **Curves**: `smooth`, `out`, `in-out`, `expo`, `back`, `linear`, `in`,
-`in-back`, `in-out-back`, a cubic bezier `[x1, y1, x2, y2]`, a spring
-(`spring(600, 15, 1).ease`), or your own function.
+`in-back`, `in-out-back`, the thirty of [easings.net](https://easings.net)
+(`ease-in-sine` to `ease-in-out-bounce`), a cubic bezier `[x1, y1, x2, y2]`,
+a spring (`spring(600, 15, 1).ease`), or your own function. `cssEase(name)`
+writes a named curve as CSS.
 
 ## Accessibility
 

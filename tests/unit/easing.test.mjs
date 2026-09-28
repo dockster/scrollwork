@@ -53,7 +53,8 @@ test('easeOf takes a name, points or a function, and falls back to out', () => {
   assert.equal(easeOf([0, 0, 1, 1])(0.5).toFixed(3), '0.500');
   assert.equal(easeOf((t) => t * t)(0.5), 0.25);
   assert.equal(easeOf('nope')(0.5), EASES.out(0.5));
-  assert.deepEqual(Object.keys(CURVES).sort(), Object.keys(EASES).filter((k) => k !== 'linear').sort());
+  // every named curve is a bezier, but for linear and the six easings.net draws (Elastic, Bounce)
+  assert.deepEqual(Object.keys(CURVES).sort(), Object.keys(EASES).filter((k) => k !== 'linear' && !/elastic|bounce/.test(k)).sort());
 });
 
 test('springs: every Figma preset starts at rest at 0, ends at 1, and settles in under two seconds', async () => {
@@ -85,4 +86,40 @@ test('an interaction may ask for a spring, and a bad one falls back to out with 
   const bad = readAnimation({ curve: 'spring', spring: [600] }, notes, 'b');
   assert.equal(bad.curve, 'out');
   assert.ok([...notes].some((n) => n.includes('spring')));
+});
+
+// ── easings.net ─────────────────────────────────────────────────────────────
+const { EASINGS, DRAWN, cssEase } = await load('easing');
+
+test('the thirty easings of easings.net, Sine to Bounce, each named', () => {
+  assert.equal(EASINGS.length, 30);
+  assert.equal(EASINGS[0], 'ease-in-sine');
+  assert.equal(EASINGS[29], 'ease-in-out-bounce');
+  for (const n of EASINGS) assert.equal(typeof EASES[n], 'function', n);
+});
+
+test('twenty four are beziers with easings.net’s points, six are drawn', () => {
+  assert.equal(EASINGS.filter((n) => CURVES[n]).length, 24);
+  assert.deepEqual(Object.keys(DRAWN).sort(), EASINGS.filter((n) => /elastic|bounce/.test(n)).sort());
+  assert.deepEqual(CURVES['ease-in-sine'], [0.12, 0, 0.39, 0]);
+  assert.deepEqual(CURVES['ease-in-out-back'], [0.68, -0.6, 0.32, 1.6]);
+  // the ones Scrollwork already had under its own name are the same curve
+  assert.deepEqual(CURVES['ease-out-quint'], CURVES.out);
+  assert.deepEqual(CURVES['ease-in-out-expo'], CURVES.smooth);
+});
+
+test('Elastic overshoots and Bounce lands on its bounces', () => {
+  let max = 0;
+  for (let t = 0; t <= 1; t += 0.01) max = Math.max(max, EASES['ease-out-elastic'](t));
+  assert.ok(max > 1.01, String(max));
+  assert.ok(Math.abs(EASES['ease-out-bounce'](1 / 2.75) - 1) < 1e-9);
+  assert.equal(EASES['ease-in-bounce'](-1), 0);
+  assert.equal(EASES['ease-in-out-elastic'](2), 1);
+});
+
+test('cssEase writes a named curve as CSS', () => {
+  assert.equal(cssEase('ease-out-circ'), 'cubic-bezier(0, 0.55, 0.45, 1)');
+  assert.equal(cssEase('linear'), 'linear');
+  const b = cssEase('ease-out-bounce');
+  assert.ok(b.startsWith('linear(0, ') && b.endsWith(', 1)') && b.split(',').length === 129, b.slice(0, 40));
 });
