@@ -150,6 +150,31 @@ the curve, and the seconds it takes to settle within a thousandth of the end.
 An interaction plays a spring over its `duration`, so give it the spring's own
 settle time.
 
+## Tokens
+
+Durations and curves can come from CSS variables, so motion follows a design
+system's tokens: change `--duration-slow` in the stylesheet and every animation
+that uses it changes with it.
+
+```html
+<style>:root { --duration-slow: 600ms; --ease-brand: cubic-bezier(0.2, 0, 0, 1); }</style>
+<div data-scrollwork='{"appear": {"effect": "fade", "duration": "var(--duration-slow)"}}'>…</div>
+<button data-scrollwork='{"hover": {"scale": 1.05}, "animation": {"curve": "var(--ease-brand)", "duration": "var(--duration-slow)"}}'>…</button>
+```
+
+Wherever a spec takes `duration`, `delay` or `stagger`, it also takes
+`"var(--name)"`, read from the element's computed style when the page is read
+(`auto()`), or from the page's root for a spec passed to `start()`. A time is
+`600ms`, `0.6s`, or a bare number of seconds. Wherever it takes a curve
+(`appear.ease`, an interaction's `animation.curve`), the variable may hold a
+curve name or `cubic-bezier(x1, y1, x2, y2)`; an interaction plays a bezier as
+its custom curve, an appear plays names only.
+
+A fallback after a comma is used when the variable is not set or holds
+something Scrollwork cannot play, such as a `linear()` curve:
+`"var(--ease-bounce, ease-out-bounce)"`. With neither, the field takes its
+default, and the console says why.
+
 ## start(spec, options)
 
 A spec is `{ "version": 1, "items": [...], "smooth": false }`. Each item has an

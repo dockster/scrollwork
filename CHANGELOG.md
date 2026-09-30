@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.4.0 (2026-09-30)
+
+- Motion from a design's tokens: a duration, delay, stagger or curve can be
+  `"var(--name)"`, read from the element's CSS (or the page's root for a spec
+  given to `start()`). Times take `ms` or `s`; curves take a name or
+  `cubic-bezier()`, and an interaction plays a bezier as its custom curve. A
+  fallback after the comma covers a variable that is missing or holds what
+  Scrollwork cannot play: `"var(--ease-bounce, ease-out-bounce)"`. See
+  Tokens in docs/REFERENCE.md.
+
 ## 1.3.0 (2026-09-28)
 
 - The thirty curves of easings.net, by name: `ease-in-sine` to

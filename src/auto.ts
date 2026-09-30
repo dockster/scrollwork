@@ -8,6 +8,7 @@
 // `hover` and `press` are shorthands for a change on that trigger; the full
 // `interactions` list is accepted as well.
 
+import { resolveVars } from './vars.js';
 import { Notes, readAnimation, readItem, state } from './spec.js';
 import type { Interaction, MotionControl, MotionItem, MotionOptions, MotionSpec } from './types.js';
 
@@ -39,6 +40,11 @@ export function readPage(root: HTMLElement, warn = true, named: HTMLElement[] = 
     try {
       const parsed = JSON.parse(el.getAttribute('data-scrollwork') || '{}');
       raw = parsed && typeof parsed === 'object' ? parsed : {};
+      // durations and curves from the design's tokens: "var(--duration-slow)" (vars.ts)
+      if (JSON.stringify(raw).includes('var(')) {
+        const style = getComputedStyle(el);
+        raw = resolveVars(raw, (name) => style.getPropertyValue(name), notes, label) as Loose;
+      }
     } catch (err) {
       notes.add(`${label}: the attribute is not valid JSON (${(err as Error).message})`);
       return;

@@ -5,6 +5,7 @@
 
 import { SPEC_VERSION } from './types.js';
 import { EASINGS } from './easing.js';
+import { resolveVars } from './vars.js';
 import type { AppearMotion, Interaction, InteractionAnimation, MotionEase, MotionItem, MotionKey, MotionSpec, MotionState, PinMotion, ScrollMotion } from './types.js';
 
 export const EASES: readonly MotionEase[] = ['smooth', 'out', 'in-out', 'expo', 'back', 'linear', 'in', 'in-back', 'in-out-back', ...EASINGS];
@@ -237,7 +238,12 @@ export function readSpec(v: unknown, warn = true): MotionSpec {
   if (!isObj(v)) notes.add('expected { items: [...] }');
   const version = s.version === undefined ? SPEC_VERSION : num(s.version, SPEC_VERSION, notes, 'version');
   if (version > SPEC_VERSION) notes.add(`version ${version} was written for a newer Scrollwork than this one (reads version ${SPEC_VERSION}); what it knows still plays`);
-  const raw = Array.isArray(s.items) ? s.items : [];
+  let raw: unknown[] = Array.isArray(s.items) ? s.items : [];
+  // a spec from code: "var(--name)" read from the page's root, where tokens live (vars.ts)
+  if (typeof document !== 'undefined' && document.documentElement && JSON.stringify(raw).includes('var(')) {
+    const style = getComputedStyle(document.documentElement);
+    raw = resolveVars(raw, (name) => style.getPropertyValue(name), notes, 'items') as unknown[];
+  }
   if (s.items !== undefined && !Array.isArray(s.items)) notes.add('items: expected a list');
   const items = raw.map((it, i) => readItem(it, notes, i)).filter((x): x is MotionItem => !!x);
   notes.flush(warn);

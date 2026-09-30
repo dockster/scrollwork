@@ -607,6 +607,27 @@ for (const name of BROWSERS) {
     await ctx.close();
   }
 
+  // durations and curves from CSS variables: the design's tokens (vars.ts)
+  {
+    const { p, ctx, errors, warnings } = await page(
+      browser,
+      `<style>:root{--dur:3000ms;--ease-brand:cubic-bezier(0.2,0,0,1)}</style>
+       <div id="t" data-scrollwork='{"appear":{"effect":"fade","duration":"var(--dur)"}}'>slow, from the token</div>
+       <div id="c" data-scrollwork='{"appear":{"effect":"fade","duration":3}}'>slow, written as a number</div>
+       <div id="f" data-scrollwork='{"appear":{"effect":"fade","duration":"var(--missing, 0.2)"}}'>quick, from the fallback</div>
+       <button id="h" data-scrollwork='{"interactions":[{"trigger":"hover","action":{"type":"change","state":{"scale":1.2}},"animation":{"curve":"var(--ease-brand)","duration":"var(--dur)"}}]}'>hover</button>`
+    );
+    await p.evaluate(() => (window.sw = window.Scrollwork.auto()));
+    await sleep(1000);
+    const o = await p.evaluate(() => ({ t: +getComputedStyle(document.getElementById('t')).opacity, c: +getComputedStyle(document.getElementById('c')).opacity, f: +getComputedStyle(document.getElementById('f')).opacity }));
+    // the default 0.8s would be done by now; 3000ms from the variable moves as 3 written out does
+    check(tag('a duration from a CSS variable plays as the number would'), o.t < 0.97 && Math.abs(o.t - o.c) < 0.05, JSON.stringify(o));
+    check(tag('a missing variable takes its fallback: 0.2s is done'), o.f > 0.98, String(o.f));
+    check(tag('a bezier token plays as a curve, with no warning'), !warnings.some((w) => /--ease-brand|--dur/.test(w)), warnings.join(' | '));
+    check(tag('no errors (variables)'), errors.length === 0, errors.join(' | '));
+    await ctx.close();
+  }
+
   await browser.close();
 }
 
