@@ -130,7 +130,9 @@ quiet it.
 | `spring(stiffness, damping, mass)` | `{ ease, duration }` | A spring as a curve, and how long it takes to settle; `SPRINGS` has Figma's four |
 
 A **control** (`auto`, `start`) has `stop()`, which gives every element back
-exactly as it was, and `replay()`.
+exactly as it was, `replay()`, and in seek mode `seek(y, height, now?)`: the
+page posed at a scroll position; with a clock, an appear that arrives plays
+in time, and the call says whether anything is still in flight.
 
 **Controls** (`animate`) have `play()`, `pause()`, `reverse()`, `seek(0..1)`,
 `finish()`, `cancel()`, `finished` (a promise), `progress` and `playing`.

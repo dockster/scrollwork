@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.5.0 (2026-10-01)
+
+- `seek(y, height, now?)` on a control takes a clock. Without one, as before,
+  an appear whose trigger has arrived is shown finished. With one
+  (`performance.now()`), an appear that arrives plays in time from that
+  moment, and a seek back above its start readies it again, so a scrubber can
+  show the entrance a reader would see. It returns whether anything is still
+  in flight: seek again each frame while it does.
+
 ## 1.4.0 (2026-09-30)
 
 - Motion from a design's tokens: a duration, delay, stagger or curve can be

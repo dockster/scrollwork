@@ -592,6 +592,34 @@ for (const name of BROWSERS) {
     check(tag('no errors (layout change)'), errors.length === 0, errors.join(' | '));
     await ctx.close();
   }
+
+  // ── seek with a clock: an appear plays in time, and a seek back readies it (1.5.0) ──
+  {
+    const { p, ctx, errors } = await page(browser, `<div style="height:2000px"></div><div id="t" data-m="t" style="height:100px">late</div><div style="height:2000px"></div>`);
+    const r = await p.evaluate(() => {
+      const sw = window.Scrollwork.start({ items: [{ id: 't', text: false, appear: { effect: 'fade', duration: 0.4, delay: 0, stagger: 0, ease: 'linear', offset: 0, replay: false } }], smooth: false }, { attr: 'data-m', root: document.body, scroller: null, reduced: false, split: false, seekOnly: true });
+      const op = () => getComputedStyle(document.getElementById('t')).opacity;
+      const out = {};
+      // no clock: above the start it waits, past it, it is shown finished
+      sw.seek(0, 800); out.waiting = op();
+      out.snapped = sw.seek(1500, 800); out.snappedOp = op();
+      // a clock: back above the start readies it, then arriving plays from that moment
+      sw.seek(0, 800, 1000); out.readied = op();
+      out.moving = sw.seek(1500, 800, 1000); out.start = op();
+      out.half = sw.seek(1500, 800, 1200); out.halfOp = op();
+      out.done = sw.seek(1500, 800, 1500); out.doneOp = op();
+      // and it stays finished while the position holds
+      out.still = sw.seek(1500, 800, 3000);
+      sw.stop();
+      return out;
+    });
+    check(tag('seek without a clock snaps an arrived appear to its end'), r.waiting === '0' && r.snapped === false && r.snappedOp === '1', JSON.stringify(r));
+    check(tag('seek with a clock back above the start readies the appear'), r.readied === '0', r.readied);
+    check(tag('seek with a clock plays the arrival in time'), r.moving === true && r.start === '0' && parseFloat(r.halfOp) > 0.3 && parseFloat(r.halfOp) < 0.7 && r.done === false && r.doneOp === '1', JSON.stringify(r));
+    check(tag('and reports nothing in flight once finished'), r.still === false);
+    check(tag('no errors (timed seek)'), errors.length === 0, errors.join(' | '));
+    await ctx.close();
+  }
   {
     const { p, ctx, errors } = await page(browser, `<div id="a">a</div>`);
     const back = await p.evaluate(async () => {

@@ -634,8 +634,10 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
             e.played = true;
             e.t0 = now ?? 0;
           }
-        } else if (now === null || (a.replay && screenTop > vh)) {
-          // seeking shows the state at that position; a replay resets once the trigger is back below the screen
+        } else if (now === null || opts.seekOnly || (a.replay && screenTop > vh)) {
+          // seeking shows the state at that position (a seek with a clock plays
+          // it again on its next arrival); a replay resets once the trigger is
+          // back below the screen
           e.played = false;
         }
         const ease = EASES[a.ease] || EASES.out;
@@ -1168,9 +1170,9 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
       stickies.clear();
       for (const r of restores.splice(0).reverse()) r();
     },
-    seek(y: number, height: number) {
+    seek(y: number, height: number, now?: number) {
       measure();
-      render(y, height, null);
+      return render(y, height, now ?? null);
     },
     replay() {
       touch();

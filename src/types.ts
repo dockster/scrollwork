@@ -218,8 +218,14 @@ export interface MotionOptions {
 export interface MotionControl {
   /** stop everything and give every element back as it was */
   stop(): void;
-  /** the state at a scroll position, with a viewport this tall (seek mode) */
-  seek(y: number, height: number): void;
+  /**
+   * The state at a scroll position, with a viewport this tall (seek mode).
+   * Without a clock an appear is shown finished once its trigger has arrived.
+   * With one (`performance.now()`), an appear that arrives plays in time from
+   * that moment, and leaving its start resets it; seek again each frame while
+   * this returns true, which says something is still in flight.
+   */
+  seek(y: number, height: number, now?: number): boolean;
   /** back to the top, every appear ready to play again */
   replay(): void;
 }
