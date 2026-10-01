@@ -6,18 +6,26 @@ defaults used when a field is left out. The README has the overview and the
 
 ## States
 
-A **state** is `{ "x", "y", "scale", "rotate", "opacity", "blur" }`:
+A **state** is `{ "x", "y", "scale", "rotate", "opacity", "blur" }`, and can
+carry `scaleX`, `scaleY`, `fill`, `ink` and `image`:
 
 | Field | Unit | At rest |
 |---|---|---|
 | `x`, `y` | px | `0` |
 | `scale` | multiple | `1` |
+| `scaleX`, `scaleY` | multiple of one axis, on top of `scale` | `1` |
 | `rotate` | degrees | `0` |
 | `opacity` | 0 to 1, multiplies the element's own | `1` |
 | `blur` | px | `0` |
+| `fill`, `ink` | a CSS colour the background (or the text, the words inside the element included) moves to | the element's own |
+| `image` | a picture's URL, shown in place of the element's own from halfway through | the element's own |
 
 A state is relative to the element as the page draws it. `y: 40` is 40px below
 where its CSS puts it, and `scale: 1.1` is 10% larger than its own scale.
+`{"scaleX": 0}` is a bar with no width that grows to its own; `{"fill":
+"#232323", "ink": "#FFFFFF"}` on hover darkens a card and lightens its words,
+eased like the rest of the state; `image` has no in-between, so it swaps at
+the midpoint and comes back when the motion ends.
 
 ## appear
 
@@ -48,6 +56,7 @@ Follows the scroll position.
 | Field | Default | |
 |---|---|---|
 | `speed` | `0` | parallax, -100 to 100: above 0 drifts slower than the page, below 0 faster |
+| `cover` | `false` | parallax inside a clipping box: scaled up just enough that the drift never shows the box's edge |
 | `from`, `to` | at rest | the states at the start and the end of the range |
 | `keys` | none | steps between them |
 | `range` | `"through"` | `through`: entering to leaving. `in`: until centred. `out`: centred to leaving |

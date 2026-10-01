@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.7.0 (2026-10-01)
+
+- `scroll.cover`: a parallax that keeps covering its parent. The element is
+  scaled up just enough that, while the parent is on screen, the drift never
+  shows the parent's edge, so a photo filling a clipped cell can drift at any
+  speed without a gap. Measured from the live viewport and the parent's box.
+
+## 1.6.0 (2026-10-01)
+
+- A state can scale one axis: `scaleX` and `scaleY`, on top of `scale`
+  (`{"scaleX": 0}` to `{"scaleX": 1}` grows a bar from nothing). At rest `1`.
+- A state can move to a colour: `fill` (background) and `ink` (text), any CSS
+  colour, eased from the element's own colour as the motion plays. `ink`
+  reaches the words inside the element too, whatever their own CSS colour, so
+  a hover that darkens a card and lightens its words is one `change`.
+- A state can show another picture: `image`, a URL, swapped halfway through
+  the motion (an `<img>`'s `src`, any other element's `background-image`) and
+  put back when the motion ends.
+
 ## 1.5.0 (2026-10-01)
 
 - `seek(y, height, now?)` on a control takes a clock. Without one, as before,

@@ -57,8 +57,8 @@ const oneOf = <T extends string>(v: unknown, allowed: readonly T[], fallback: T,
 export const state = (v: unknown, notes: Notes, what: string, base: Partial<MotionState> = {}): MotionState => {
   const s = isObj(v) ? v : {};
   if (v !== undefined && !isObj(v)) notes.add(`${what}: expected an object like {"y": 40, "opacity": 0}`);
-  const b = { x: 0, y: 0, scale: 1, rotate: 0, opacity: 1, blur: 0, ...base };
-  return {
+  const b = { x: 0, y: 0, scale: 1, scaleX: 1, scaleY: 1, rotate: 0, opacity: 1, blur: 0, ...base };
+  const out: MotionState = {
     x: num(s.x, b.x, notes, what + '.x'),
     y: num(s.y, b.y, notes, what + '.y'),
     scale: num(s.scale, b.scale, notes, what + '.scale', 0),
@@ -66,6 +66,30 @@ export const state = (v: unknown, notes: Notes, what: string, base: Partial<Moti
     opacity: num(s.opacity, b.opacity, notes, what + '.opacity', 0, 1),
     blur: num(s.blur, b.blur, notes, what + '.blur', 0),
   };
+  // one axis, a colour or a picture: only when given, so a state reads back as it was written
+  if (s.scaleX !== undefined || b.scaleX !== 1) out.scaleX = num(s.scaleX, b.scaleX, notes, what + '.scaleX', 0);
+  if (s.scaleY !== undefined || b.scaleY !== 1) out.scaleY = num(s.scaleY, b.scaleY, notes, what + '.scaleY', 0);
+  const fill = colour(s.fill ?? b.fill, notes, what + '.fill');
+  if (fill) out.fill = fill;
+  const ink = colour(s.ink ?? b.ink, notes, what + '.ink');
+  if (ink) out.ink = ink;
+  const image = picture(s.image ?? b.image, notes, what + '.image');
+  if (image) out.image = image;
+  return out;
+};
+/** a CSS colour as written (a name, hex, rgb(), oklch()…): letters, digits, # ( ) , . % and spaces, nothing that could end a declaration */
+const colour = (v: unknown, notes: Notes, what: string): string | undefined => {
+  if (v === undefined) return undefined;
+  if (typeof v === 'string' && v.length <= 80 && /^[\w#(),.%\s/-]+$/.test(v)) return v.trim();
+  notes.add(`${what}: expected a CSS colour like "#A1FFCB"`);
+  return undefined;
+};
+/** a picture's address: http(s), a data: image, or a path; no quotes, spaces or newlines */
+const picture = (v: unknown, notes: Notes, what: string): string | undefined => {
+  if (v === undefined) return undefined;
+  if (typeof v === 'string' && v.length <= 20_000_000 && /^(https?:\/\/|data:image\/|\/|\.{0,2}\/|[\w-])[^\s"'<>\\]*$/.test(v) && !/^javascript:/i.test(v)) return v;
+  notes.add(`${what}: expected a picture's URL`);
+  return undefined;
 };
 
 const keys = (v: unknown, notes: Notes, what: string): MotionKey[] | undefined => {
@@ -108,6 +132,7 @@ export function readScroll(v: unknown, notes: Notes, what: string): ScrollMotion
   const s = isObj(v) ? v : {};
   return {
     speed: num(s.speed, 0, notes, what + '.speed', -100, 100),
+    ...(s.cover === true ? { cover: true } : {}),
     from: state(s.from, notes, what + '.from'),
     to: state(s.to, notes, what + '.to'),
     range: oneOf(s.range, RANGES, 'through', notes, what + '.range'),

@@ -139,3 +139,32 @@ test('a made-up easing is refused with a note, and falls back to out', async () 
   assert.equal(ix.animation.curve, 'out');
   assert.ok([...notes].some((n) => n.includes('ease-in-wobble')), [...notes].join());
 });
+
+test('a state can scale one axis, move to a colour and show a picture; the rest is left out', () => {
+  const { value, out } = said(() => readSpec({ items: [{ id: 'a', interactions: [{ trigger: 'hover', action: { type: 'change', state: { scaleX: 0, fill: '#A1FFCB', ink: 'white', image: 'https://example.com/a.png' } } }] }] }));
+  const s = value.items[0].interactions[0].action.state;
+  assert.equal(s.scaleX, 0);
+  assert.equal(s.scaleY, undefined);
+  assert.equal(s.fill, '#A1FFCB');
+  assert.equal(s.ink, 'white');
+  assert.equal(s.image, 'https://example.com/a.png');
+  assert.equal(out, '');
+  const plain = readSpec({ items: [{ id: 'b', interactions: [{ trigger: 'hover', action: { type: 'change', state: { scale: 1.1 } } }] }] }).items[0].interactions[0].action.state;
+  assert.deepEqual(plain, { x: 0, y: 0, scale: 1.1, rotate: 0, opacity: 1, blur: 0 });
+});
+
+test('a colour or a picture that is not one is refused, and said', () => {
+  const { value, out } = said(() => readSpec({ items: [{ id: 'a', interactions: [{ trigger: 'hover', action: { type: 'change', state: { fill: 'red; background: url(x)', image: 'javascript:alert(1)' } } }] }] }));
+  const s = value.items[0].interactions[0].action.state;
+  assert.equal(s.fill, undefined);
+  assert.equal(s.image, undefined);
+  assert.match(out, /fill: expected a CSS colour/);
+  assert.match(out, /image: expected a picture's URL/);
+});
+
+test('a parallax can keep covering its parent; left out otherwise', () => {
+  const on = readSpec({ items: [{ id: 'a', scroll: { speed: 30, cover: true } }] }).items[0].scroll;
+  assert.equal(on.cover, true);
+  const off = readSpec({ items: [{ id: 'a', scroll: { speed: 30 } }] }).items[0].scroll;
+  assert.equal('cover' in off, false);
+});

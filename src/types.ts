@@ -12,12 +12,21 @@ export interface MotionState {
   /** px */
   y: number;
   scale: number;
+  /** one axis on top of `scale`: 1 is the element's own width (or height), 0 is nothing */
+  scaleX?: number;
+  scaleY?: number;
   /** degrees */
   rotate: number;
   /** 0 to 1, multiplies the element's own opacity */
   opacity: number;
   /** px */
   blur: number;
+  /** a background colour to move to (any CSS colour); the element's own when unset */
+  fill?: string;
+  /** a text colour to move to */
+  ink?: string;
+  /** a picture to show in place of the element's own, by URL: an <img>'s src, any other element's background-image. Swapped halfway through the motion */
+  image?: string;
 }
 
 /** The easing functions of easings.net, by family: `ease-in-sine` to `ease-in-out-bounce`. */
@@ -70,6 +79,8 @@ export type ScrollRange = 'through' | 'in' | 'out';
 export interface ScrollMotion {
   /** parallax, -100 to 100: positive moves slower than the page (farther away), negative faster (nearer) */
   speed: number;
+  /** parallax inside a clipping box: scaled up just enough that the drift never shows the box's edge (a photo filling a cell) */
+  cover?: boolean;
   from: MotionState;
   to: MotionState;
   /** through: from entering to leaving; in: until centred; out: from centred to leaving */

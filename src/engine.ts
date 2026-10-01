@@ -9,7 +9,7 @@
 // back exactly as it was.
 
 import { bezier, clamp01, EASES, spring } from './easing.js';
-import { combine, identity, mix, NONE, paint, putInline, BLANK, readBase, release, type Base, type State } from './style.js';
+import { combine, identity, mix, NONE, paint, parseColour, putInline, BLANK, readBase, release, type Base, type State } from './style.js';
 import type { AppearMotion, Interaction, InteractionAnimation, MotionControl, MotionItem, MotionKey, MotionOptions, MotionSpec, MotionState } from './types.js';
 
 export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionControl {
@@ -23,6 +23,9 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
     lines: boolean;
     top: number;
     height: number;
+    /** the parent's box, for a parallax that keeps covering it */
+    pTop: number;
+    pHeight: number;
     played: boolean;
     t0: number;
     pinOffset: number;
@@ -42,7 +45,22 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
     return root.matches(sel) ? root : (root.querySelector(sel) as HTMLElement | null);
   };
 
-  const asState = (m: MotionState): State => ({ ...identity(), ...m, yp: 0, clip: 0 });
+  const colourOf = (text: string) => parseColour(root.ownerDocument, text);
+  const asState = (m: MotionState): State => {
+    const s = identity();
+    s.x = m.x;
+    s.y = m.y;
+    s.scale = m.scale;
+    s.sx = m.scaleX ?? 1;
+    s.sy = m.scaleY ?? 1;
+    s.rotate = m.rotate;
+    s.opacity = m.opacity;
+    s.blur = m.blur;
+    if (m.fill) s.fill = { c: colourOf(m.fill), k: 1 };
+    if (m.ink) s.ink = { c: colourOf(m.ink), k: 1 };
+    if (m.image) s.image = { url: m.image, k: 1 };
+    return s;
+  };
   /** a timeline of stops at 0-100%: the state `k` (0-1) of the way along, each step eased on its own */
   const timeline = (first: State, keys: MotionKey[] | undefined, last: State, k: number, ease: (t: number) => number): State => {
     const stops = [{ at: 0, s: first }, ...(keys || []).slice().sort((a, b) => a.at - b.at).map((key) => ({ at: key.at, s: asState(key.state) })), { at: 100, s: last }];
@@ -74,14 +92,7 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
         s.clip = 100;
         s.y = 24;
       }
-    } else {
-      s.x = a.from.x;
-      s.y = a.from.y;
-      s.scale = a.from.scale;
-      s.rotate = a.from.rotate;
-      s.opacity = a.from.opacity;
-      s.blur = a.from.blur;
-    }
+    } else return asState(a.from);
     return s;
   };
 
@@ -227,6 +238,8 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
       lines: splitBy === 'lines',
       top: 0,
       height: 0,
+      pTop: 0,
+      pHeight: 0,
       played: false,
       t0: 0,
       pinOffset: 0,
@@ -521,6 +534,9 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
     for (const e of entries) {
       e.top = layoutTop(e.el);
       e.height = e.el.offsetHeight;
+      const parent = e.el.parentElement;
+      e.pTop = parent ? layoutTop(parent) : 0;
+      e.pHeight = parent ? parent.offsetHeight : 0;
       // the width changed, so the lines wrap somewhere else
       if (e.lines && e.units.length) group(e.units);
     }
@@ -605,7 +621,21 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
       if (sc && !reduced) {
         if (sc.speed) {
           const centre = topOf(e.el) - e.pinOffset + e.height / 2 - y;
-          own.y += (-sc.speed / 100) * (centre - vh / 2);
+          const s = -sc.speed / 100;
+          own.y += s * (centre - vh / 2);
+          if (sc.cover && e.height > 0 && e.pHeight > 0) {
+            // Scaled up just enough that, for as long as its parent is on
+            // screen, the drift never shows the parent's edge: the drift is
+            // linear in the scroll, so the two ends of that stretch are enough
+            const cy = e.top + e.height / 2;
+            const above = cy - e.pTop;
+            const below = e.pTop + e.pHeight - cy;
+            const y1 = s * (above + vh / 2);
+            const y2 = s * (above - e.pHeight - vh / 2);
+            const need = Math.max(above + y1, above + y2, below - y1, below - y2) + 1;
+            const k = (2 * need) / e.height;
+            if (k > 1) own.scale *= k;
+          }
         }
         const trig = triggerOf(e, sc.trigger);
         const te = byEl.get(trig);

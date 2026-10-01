@@ -105,13 +105,15 @@ defaults, is in [docs/REFERENCE.md](docs/REFERENCE.md).
 | Key | What it does |
 |---|---|
 | `appear` | Plays once the element comes into view: `fade`, `slide-up`, `mask`, `blur`, `scale` or a `custom` start state. Text can be split into `lines`, `words` or letters (`chars`), with a stagger. |
-| `scroll` | Follows the scroll position: parallax (`speed`), or `from` and `to` states scrubbed across the element's passage. |
+| `scroll` | Follows the scroll position: parallax (`speed`, with `cover` to keep a picture over its clipped box), or `from` and `to` states scrubbed across the element's passage. |
 | `pin` | Holds the element in place for a stretch of scrolling. |
 | `hover`, `press` | A state to move to while hovered (or focused by keyboard) or pressed. |
 | `interactions` | The full list: click, key, delay, a video ending and more, changing state, scrolling to an element, or calling your own `custom` action. |
 
 A **state** is `{ x, y, scale, rotate, opacity, blur }`, in px, a multiple,
 degrees, 0 to 1 and px. It is relative to the element as your CSS draws it.
+It can also scale one axis (`scaleX`, `scaleY`), move to a colour (`fill`,
+`ink`) or show another picture (`image`).
 
 If the JSON is broken, or a value is not one Scrollwork knows, it says so in
 the console (`[scrollwork] …`) and uses the default. Pass `warn: false` to
