@@ -263,6 +263,10 @@ without smoothing. Always moving while on screen.
 Colours are hex (`#rgb`, `#rrggbb`, with alpha), `rgb()`/`rgba()` or
 `transparent`.
 
+A field draws behind the element's children and over its own background, as a
+background picture would: the element is isolated (`isolation: isolate`) while
+the effect plays, and given back on stop.
+
 ## start(spec, options)
 
 A spec is `{ "version": 1, "items": [...], "smooth": false }`. Each item has an

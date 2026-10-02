@@ -840,11 +840,21 @@ for (const name of BROWSERS) {
       await sleep(250);
       const near = await ink(170, 120, 60);
       check(tag('dither: under the pointer, through what covers it, the dots thin and the paper takes the accent'), near.dark < before.dark * 0.9 && near.tint > 0.2, JSON.stringify({ before, near }));
+      // the field is behind the box's content: the words over it are what the pointer and the eye find
+      const order = await p.evaluate(() => {
+        const host = document.getElementById('d');
+        const v = host.querySelector(':scope > canvas.ux-motion-fx');
+        const r = document.getElementById('over').getBoundingClientRect();
+        const top = document.elementFromPoint(r.left + 5, r.top + 5);
+        return { first: host.firstElementChild === v, z: getComputedStyle(v).zIndex, iso: getComputedStyle(host).isolation, top: top && top.id };
+      });
+      check(tag('dither: a field sits behind the box’s children, over its fill'), order.first && order.z === '-1' && order.iso === 'isolate' && order.top === 'over', JSON.stringify(order));
       const after = await p.evaluate(() => {
         window.sw.stop();
-        return document.querySelectorAll('canvas.ux-motion-fx').length;
+        const host = document.getElementById('d');
+        return { views: document.querySelectorAll('canvas.ux-motion-fx').length, iso: host.style.isolation };
       });
-      check(tag('dither: stop() removes the view'), after === 0, String(after));
+      check(tag('dither: stop() removes the view and the isolation'), after.views === 0 && after.iso === '', JSON.stringify(after));
     }
     check(tag('no errors (dither)'), errors.length === 0, errors.join(' | '));
     await ctx.close();

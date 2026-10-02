@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.9.1 (2026-10-02)
+
+- `dither` draws behind the element's children and over its own fill, as a
+  background does: before, the field was drawn last and covered the words and
+  pictures inside the element. The element is isolated while the effect plays
+  (`isolation: isolate`, given back on stop) so the field cannot fall behind
+  it. Picture effects (glitch) still draw over their picture.
+
 ## 1.9.0 (2026-10-02)
 
 - `loop`: an element moves from one state to another over and over (a

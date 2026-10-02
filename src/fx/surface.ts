@@ -65,6 +65,8 @@ export interface Host {
   shown: boolean;
   /** what to undo on stop */
   position: string | null;
+  /** a field's host is isolated so its view can sit behind its children; the inline value it had */
+  isolation: string | null;
   off: Array<() => void>;
 }
 
@@ -83,7 +85,7 @@ export interface Surface {
 const SHADERS: Record<FxType, string> = { glitch: GLITCH, dither: DITHER };
 /** effects that leave the picture as it is at k 0: at rest the host's own picture shows and nothing draws */
 const IDLE_IDENTITY: Record<FxType, boolean> = { glitch: true, dither: false };
-const STYLE = '.ux-motion-fx{position:absolute;inset:0;width:100%;height:100%;border-radius:inherit;pointer-events:none;display:block}.ux-motion-fx.is-crisp{image-rendering:pixelated}';
+const STYLE = '.ux-motion-fx{position:absolute;inset:0;width:100%;height:100%;border-radius:inherit;pointer-events:none;display:block}.ux-motion-fx.is-crisp{image-rendering:pixelated}.ux-motion-fx.is-field{z-index:-1}';
 /** hosts that cannot hold a child canvas */
 const NO_CHILD = /^(IMG|VIDEO|CANVAS|INPUT|TEXTAREA|SELECT|svg|IFRAME|BR|HR)$/;
 
@@ -430,8 +432,20 @@ export function createSurface(o: SurfaceOptions): Surface | null {
         position = el.style.position;
         el.style.position = 'relative';
       }
-      el.appendChild(view);
-      if (fx.some((f) => f.type === 'dither')) view.classList.add('is-crisp');
+      // A field (dither) fills a box whose children are the page's content: its
+      // view goes behind them and over the box's own fill. The host is isolated
+      // so the view cannot fall behind the host itself. A picture effect draws
+      // over its picture, which has no children to cover.
+      const field = fx.some((f) => f.type === 'dither');
+      let isolation: string | null = null;
+      if (field) {
+        view.classList.add('is-crisp', 'is-field');
+        if (cs.isolation !== 'isolate') {
+          isolation = el.style.isolation;
+          el.style.isolation = 'isolate';
+        }
+        el.insertBefore(view, el.firstChild);
+      } else el.appendChild(view);
       const r = el.getBoundingClientRect();
       const h: Host = {
         el,
@@ -457,6 +471,7 @@ export function createSurface(o: SurfaceOptions): Surface | null {
         t0: win.performance.now(),
         shown: false,
         position,
+        isolation,
         off: [],
       };
       const on = (type: string, fn: (ev: Event) => void) => {
@@ -502,6 +517,7 @@ export function createSurface(o: SurfaceOptions): Surface | null {
       h.view.remove();
       if (h.tex) gl.deleteTexture(h.tex);
       if (h.position !== null) el.style.position = h.position;
+      if (h.isolation !== null) el.style.isolation = h.isolation;
     },
     draw(now, dt, read) {
       if (stopped || lost || paused) return false;
