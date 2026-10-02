@@ -6,10 +6,10 @@
 import { SPEC_VERSION } from './types.js';
 import { EASINGS } from './easing.js';
 import { resolveVars } from './vars.js';
-import type { AppearMotion, FxSpec, Interaction, InteractionAnimation, MotionEase, MotionItem, MotionKey, MotionSpec, MotionState, PinMotion, ScrollMotion } from './types.js';
+import type { AppearMotion, FxSpec, LoopMotion, Interaction, InteractionAnimation, MotionEase, MotionItem, MotionKey, MotionSpec, MotionState, PinMotion, ScrollMotion } from './types.js';
 
 export const EASES: readonly MotionEase[] = ['smooth', 'out', 'in-out', 'expo', 'back', 'linear', 'in', 'in-back', 'in-out-back', ...EASINGS];
-const EFFECTS = ['fade', 'slide-up', 'mask', 'blur', 'scale', 'custom'] as const;
+const EFFECTS = ['fade', 'slide-up', 'mask', 'blur', 'scale', 'custom', 'roll'] as const;
 const SPLITS = ['none', 'lines', 'words', 'chars'] as const;
 const RANGES = ['through', 'in', 'out'] as const;
 const TRIGGERS = ['none', 'click', 'drag', 'hover', 'press', 'key', 'mouseenter', 'mouseleave', 'mousedown', 'mouseup', 'delay', 'media-end', 'media-time'] as const;
@@ -111,9 +111,11 @@ export function readAppear(v: unknown, notes: Notes, what: string): AppearMotion
   const a = isObj(v) ? v : {};
   // a start state given without an effect is a custom start, not slide-up
   const effect = a.effect === undefined && a.from !== undefined ? 'custom' : oneOf(a.effect, EFFECTS, APPEAR_DEFAULTS.effect, notes, what + '.effect');
+  // a roll turns each digit on its own: always by letter
+  const split = effect === 'roll' ? 'chars' : oneOf(a.split, SPLITS, APPEAR_DEFAULTS.split, notes, what + '.split');
   return {
     effect,
-    split: oneOf(a.split, SPLITS, APPEAR_DEFAULTS.split, notes, what + '.split'),
+    split,
     duration: num(a.duration, APPEAR_DEFAULTS.duration, notes, what + '.duration', 0),
     delay: num(a.delay, APPEAR_DEFAULTS.delay, notes, what + '.delay', 0),
     stagger: num(a.stagger, APPEAR_DEFAULTS.stagger, notes, what + '.stagger', 0),
@@ -124,6 +126,26 @@ export function readAppear(v: unknown, notes: Notes, what: string): AppearMotion
     from: state(a.from, notes, what + '.from', a.from === undefined ? { y: 40, opacity: 0 } : {}),
     keys: keys(a.keys, notes, what + '.keys'),
     trigger: typeof a.trigger === 'string' ? a.trigger : undefined,
+    ...(effect === 'roll' ? { turns: Math.round(num(a.turns, 1, notes, what + '.turns', 0, 10)) } : {}),
+  };
+}
+
+export const LOOP_DEFAULTS = { duration: 4, ease: 'linear', yoyo: false, delay: 0 } as const;
+
+export function readLoop(v: unknown, notes: Notes, what: string): LoopMotion | undefined {
+  if (v === undefined || v === false) return undefined;
+  if (!isObj(v)) {
+    notes.add(`${what}: expected an object like {"to": {"rotate": 360}, "duration": 8}`);
+    return undefined;
+  }
+  return {
+    from: state(v.from, notes, what + '.from'),
+    to: state(v.to, notes, what + '.to'),
+    duration: num(v.duration, LOOP_DEFAULTS.duration, notes, what + '.duration', 0.05),
+    ease: oneOf(v.ease, EASES, LOOP_DEFAULTS.ease, notes, what + '.ease'),
+    yoyo: v.yoyo === undefined ? LOOP_DEFAULTS.yoyo : !!v.yoyo,
+    delay: num(v.delay, LOOP_DEFAULTS.delay, notes, what + '.delay', 0),
+    keys: keys(v.keys, notes, what + '.keys'),
   };
 }
 
@@ -246,6 +268,8 @@ export function readItem(v: unknown, notes: Notes, i: number): MotionItem | null
   if (s) item.scroll = s;
   const p = readPin(v.pin, notes, `${what}.pin`);
   if (p) item.pin = p;
+  const l = readLoop(v.loop, notes, `${what}.loop`);
+  if (l) item.loop = l;
   if (v.interactions !== undefined) {
     if (!Array.isArray(v.interactions)) notes.add(`${what}.interactions: expected a list`);
     else {

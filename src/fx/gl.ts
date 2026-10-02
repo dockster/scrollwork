@@ -90,13 +90,15 @@ export function triangle(gl: WebGL2RenderingContext): WebGLVertexArrayObject | n
 }
 
 /** Set the uniforms a program has among those given; the rest are left alone. */
-export function setUniforms(gl: WebGL2RenderingContext, p: Program, values: Record<string, number | [number, number]>): void {
+export function setUniforms(gl: WebGL2RenderingContext, p: Program, values: Record<string, number | readonly number[]>): void {
   for (const name in values) {
     const loc = p.uniforms.get(name);
     if (!loc) continue;
     const v = values[name];
     if (typeof v === 'number') gl.uniform1f(loc, v);
-    else gl.uniform2f(loc, v[0], v[1]);
+    else if (v.length === 2) gl.uniform2f(loc, v[0], v[1]);
+    else if (v.length === 3) gl.uniform3f(loc, v[0], v[1], v[2]);
+    else gl.uniform4f(loc, v[0], v[1], v[2], v[3]);
   }
 }
 

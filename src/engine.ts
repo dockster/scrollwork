@@ -13,7 +13,8 @@ import { combine, identity, mix, NONE, paint, parseColour, putInline, BLANK, rea
 import type { AppearMotion, Interaction, InteractionAnimation, MotionControl, MotionItem, MotionKey, MotionOptions, MotionSpec, MotionState, PluginHandle, Signals } from './types.js';
 
 export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionControl {
-  type Unit = { el: HTMLElement; index: number };
+  /** a piece of split text; a rolled digit's column has `rows`, the digits it rolls through */
+  type Unit = { el: HTMLElement; index: number; rows?: number };
   type Entry = {
     item: MotionItem;
     el: HTMLElement;
@@ -31,6 +32,8 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
     pinOffset: number;
     /** Change to, one per interaction: how far along (p) and where it is heading (to) */
     changes: Array<{ ix: Interaction; p: number; to: number; timer: number }>;
+    /** when the loop started, by the frame clock; -1 until the first frame with a clock */
+    l0: number;
     /** what this frame drew, for plugins: appear progress, scroll progress, the picture in flight */
     sig: { appear: number; scroll: number; image: { url: string; k: number } | null };
   };
@@ -88,7 +91,7 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
     } else if (a.effect === 'scale') {
       s.scale = 0.85;
       s.opacity = 0;
-    } else if (a.effect === 'mask') {
+    } else if (a.effect === 'mask' || a.effect === 'roll') {
       if (unit) s.yp = 110;
       else {
         s.clip = 100;
@@ -100,7 +103,8 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
 
   // ── text split: every text node becomes spans, and goes back on stop ──
   const restores: Array<() => void> = [];
-  const split = (el: HTMLElement, by: 'lines' | 'words' | 'chars', mask: boolean): Unit[] => {
+  const split = (el: HTMLElement, by: 'lines' | 'words' | 'chars', mask: boolean, turns = -1): Unit[] => {
+    const roll = turns >= 0;
     const doc = el.ownerDocument;
     // A screen reader reads the pieces one by one ("H, e, l, l, o"). The
     // pieces are hidden from it and the words are said once, whole, by a copy
@@ -144,6 +148,37 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
         if (by === 'chars') {
           for (const ch of Array.from(part)) {
             const c = inline('ux-motion-char');
+            if (roll && ch >= '0' && ch <= '9') {
+              // An odometer wheel: the digit itself, unseen, gives the window its
+              // size; a column of digits behind it rolls up to the digit, from a
+              // blank row, going round `turns` times first. Each digit's column
+              // is as long as its value, so the higher ones spin faster.
+              c.style.position = 'relative';
+              c.style.overflow = 'hidden';
+              c.style.overflow = 'clip';
+              c.style.verticalAlign = 'top';
+              const size = doc.createElement('span');
+              size.className = 'ux-motion-size';
+              size.style.visibility = 'hidden';
+              size.textContent = ch;
+              const col = doc.createElement('span');
+              col.className = 'ux-motion-roll';
+              col.style.cssText = 'position:absolute;left:0;top:0;width:100%;display:block;text-align:center';
+              const d = ch.charCodeAt(0) - 48;
+              const seq = ['\u00a0'];
+              for (let i = 0; i <= turns * 10 + d; i++) seq.push(String(i % 10));
+              for (const r of seq) {
+                const row = doc.createElement('span');
+                row.className = 'ux-motion-row';
+                row.style.display = 'block';
+                row.textContent = r;
+                col.appendChild(row);
+              }
+              c.append(size, col);
+              holder.appendChild(c);
+              units.push({ el: col, index: units.length, rows: seq.length });
+              continue;
+            }
             c.textContent = ch;
             holder.appendChild(c);
             units.push({ el: c, index: units.length });
@@ -235,7 +270,8 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
     const entry: Entry = {
       item,
       el,
-      units: splitBy ? split(el, splitBy, a!.effect === 'mask') : [],
+      // a roll masks too: what is not a digit slides up into its word
+      units: splitBy ? split(el, splitBy, a!.effect === 'mask' || a!.effect === 'roll', a!.effect === 'roll' ? (a!.turns ?? 1) : -1) : [],
       base,
       lines: splitBy === 'lines',
       top: 0,
@@ -246,6 +282,7 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
       t0: 0,
       pinOffset: 0,
       changes: (item.interactions || []).filter((ix) => ix.action.type === 'change').map((ix) => ({ ix, p: 0, to: 0, timer: 0 })),
+      l0: -1,
       sig: { appear: 1, scroll: 0, image: null },
     };
     entries.push(entry);
@@ -688,7 +725,12 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
             const k = progress(u.index);
             // playing, not merely waiting for its turn on screen
             if (e.played && k < 1) moving = true;
-            paint(u.el, timeline(from, a.keys, identity(), k, ease), NONE);
+            if (u.rows) {
+              // the column rolls up a row at a time: row i shows at -i/rows of its height
+              const r = identity();
+              r.yp = (-ease(k) * (u.rows - 1) * 100) / u.rows;
+              paint(u.el, r, NONE);
+            } else paint(u.el, timeline(from, a.keys, identity(), k, ease), NONE);
           }
         } else {
           const k = progress(0);
@@ -696,6 +738,21 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
           own = combine(own, timeline(appearFrom(a, false), a.keys, identity(), k, ease));
         }
         e.sig.appear = progress(0);
+      }
+      const lp = it.loop;
+      if (lp && now !== null && !reduced) {
+        if (e.l0 < 0) e.l0 = now;
+        // on screen (with a little margin) it plays; off screen its clock runs on, unseen and unpainted
+        const top = topOf(e.el) - y;
+        const seen = top < vh + 100 && top + e.height > -100;
+        const t = (now - e.l0) / 1000 - lp.delay;
+        if (t > 0) {
+          const d = lp.duration;
+          let k = (t % (lp.yoyo ? 2 * d : d)) / d;
+          if (k > 1) k = 2 - k;
+          own = combine(own, timeline(asState(lp.from), lp.keys, asState(lp.to), k, EASES[lp.ease] || EASES.linear));
+        }
+        if (seen) moving = true;
       }
       if (now !== null) {
         for (const c of e.changes) {

@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.9.0 (2026-10-02)
+
+- `loop`: an element moves from one state to another over and over (a
+  marquee, a slow spin, a pulse), with a duration, a curve, `yoyo` to go there
+  and back, a `delay` and `keys`. It plays only while the element is on screen,
+  so an off-screen loop never keeps the page awake, and not at all under
+  reduced motion.
+- `appear.effect: "roll"`: numbers roll in like an odometer. Each digit becomes
+  a wheel that goes round `turns` times (1 by default) and lands on its value,
+  the wheels staggered; the other characters slide up through a mask. The text
+  is said once, whole, to a screen reader, and comes back as it was on stop.
+- `scrollwork/fx` `dither`: a field of dots, ordered (bayer) or a halftone
+  screen, of a slow drifting cloud, or of the element's picture when it has
+  one. The pointer leaves a trail that thins the dots and tints the paper
+  (`accent`), followed over the whole element even under the words and
+  pictures that cover it. Drawn one bitmap pixel per CSS pixel and scaled
+  without smoothing, so the dots stay crisp. `color2: "transparent"` (the
+  default) lets the element's own fill show between the dots.
+- fx colours (`color`, `color2`, `accent`) are hex, `rgb()` or `transparent`,
+  checked and said like the numbers.
+
 ## 1.8.0 (2026-10-02)
 
 - `scrollwork/fx`: WebGL effects on the elements Scrollwork moves, in a file

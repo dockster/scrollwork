@@ -5,8 +5,8 @@
 
 export { fx } from './plugin.js';
 export { createSurface, type Surface, type SurfaceOptions, type Host } from './surface.js';
-export { readFx, readOneFx, FX_DEFAULTS } from './spec.js';
-export type { Fx, FxType, FxOn, GlitchFx } from './types.js';
+export { readFx, readOneFx, FX_DEFAULTS, rgbaOf } from './spec.js';
+export type { Fx, FxType, FxOn, GlitchFx, DitherFx } from './types.js';
 
 declare const __SCROLLWORK_VERSION__: string;
 export const version: string = typeof __SCROLLWORK_VERSION__ === 'string' ? __SCROLLWORK_VERSION__ : 'dev';

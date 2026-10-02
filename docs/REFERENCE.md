@@ -33,7 +33,7 @@ Plays once the element (or its trigger) comes into view.
 
 | Field | Default | |
 |---|---|---|
-| `effect` | `"slide-up"` | `fade`, `slide-up`, `mask`, `blur`, `scale`, `custom` |
+| `effect` | `"slide-up"` | `fade`, `slide-up`, `mask`, `blur`, `scale`, `custom`, `roll` (text: digits roll like an odometer, always by letter) |
 | `split` | `"none"` | text only: `lines`, `words`, `chars` |
 | `duration` | `0.8` | seconds |
 | `delay` | `0` | seconds |
@@ -44,6 +44,7 @@ Plays once the element (or its trigger) comes into view.
 | `offset` | `15` | starts when the trigger's top is this percent into the view |
 | `replay` | `false` | plays again each time it comes back into view |
 | `trigger` | the element | another element's `data-sw-id` whose arrival starts it |
+| `turns` | `1` | `roll` only: times each digit goes round 0 to 9 before its value, 0 to 10 |
 
 Text is split when the element holds words and only inline elements (`<em>`,
 `<strong>`, a link). Set `"text": false` to never split it, or `"text": true`
@@ -61,6 +62,23 @@ Follows the scroll position.
 | `keys` | none | steps between them |
 | `range` | `"through"` | `through`: entering to leaving. `in`: until centred. `out`: centred to leaving |
 | `trigger` | the element | another element whose passage drives it; a pinned trigger drives it across its hold |
+
+## loop
+
+Moves from one state to another over and over, while the element is on
+screen; nothing under reduced motion. `{"to": {"x": -640}, "duration": 12.8}`
+is a marquee (two copies of the row side by side, the row moved by one copy's
+width); `{"to": {"rotate": 360}, "duration": 20}` a slow spin.
+
+| Field | Default | |
+|---|---|---|
+| `from` | at rest | where each turn starts |
+| `to` | at rest | where it ends |
+| `duration` | `4` | seconds per turn |
+| `ease` | `"linear"` | any curve name |
+| `yoyo` | `false` | there and back (`from`, `to`, `from`) instead of starting over |
+| `delay` | `0` | seconds before the first turn |
+| `keys` | none | steps between `from` and `to` |
 
 ## pin
 
@@ -218,6 +236,32 @@ as `background-size: cover` or `contain` says. It is read with CORS
 cannot be read, and the element keeps it as it is. The same when there is no
 WebGL2, no `OffscreenCanvas` (Safari before 16.4), or the reader asked for
 reduced motion.
+
+### dither
+
+A field of dots over the element: an ordered (bayer) dither or a halftone
+screen of a slow drifting cloud, or of the element's own picture when it has
+one. The pointer leaves a trail that thins the dots and tints the paper; it is
+followed over the whole element, even under what covers it, since a field is
+usually drawn behind the page. Drawn one bitmap pixel per CSS pixel and scaled
+without smoothing. Always moving while on screen.
+
+| Field | Default | |
+|---|---|---|
+| `on` | `"always"` | `hover` draws it only while the pointer is over it |
+| `intensity` | `0.7` | how dark the darkest part gets |
+| `mode` | `"bayer"` | `bayer` or `halftone` |
+| `size` | `2` | px: a bayer cell; a halftone dot's spacing is three times it |
+| `scale` | `420` | px: how large the cloud's shapes are |
+| `color` | `"#000000"` | the dots |
+| `color2` | `"transparent"` | between the dots; transparent shows the element's own fill |
+| `accent` | `"#B3FDD0"` | the trail's tint on the paper |
+| `radius` | `90` | px the trail reaches around the pointer |
+| `trail` | `0.35` | seconds the trail's tail takes to catch up |
+| `in`, `out` | `0.2`, `0.6` | seconds the trail takes to show and to fade |
+
+Colours are hex (`#rgb`, `#rrggbb`, with alpha), `rgb()`/`rgba()` or
+`transparent`.
 
 ## start(spec, options)
 

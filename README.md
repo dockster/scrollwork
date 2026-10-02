@@ -4,9 +4,9 @@ Scroll, appear, pin and interaction motion for the web. Describe it in HTML
 with a `data-scrollwork` attribute, or in code with `animate()`, `inView()`
 and `scroll()`.
 
-- **About 17 KB gzipped, no dependencies.** One file for a `<script>` tag, or
+- **About 18 KB gzipped, no dependencies.** One file for a `<script>` tag, or
   an ES module for your bundler, with TypeScript types. WebGL effects are a
-  separate, optional file (`scrollwork/fx`, about 6 KB).
+  separate, optional file (`scrollwork/fx`, about 8 KB).
 - **Declarative first.** Text that rises line by line, parallax, pinned
   sections and hover states come from data, not code.
 - **Leaves your styles alone.** Motion is added to what the element already
@@ -180,7 +180,8 @@ blank. An element that cannot hold a child (`<img>`, `<video>`) is left alone;
 put the picture on a `<div>`'s background instead.
 
 Effects: `glitch` (blocks of the picture shift and the colours split while
-hovering). More follow.
+hovering) and `dither` (a crisp field of bayer or halftone dots over a drifting
+cloud or the element's picture, with a pointer trail). More follow.
 
 ## Accessibility
 

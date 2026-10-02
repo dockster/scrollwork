@@ -168,3 +168,26 @@ test('a parallax can keep covering its parent; left out otherwise', () => {
   const off = readSpec({ items: [{ id: 'a', scroll: { speed: 30 } }] }).items[0].scroll;
   assert.equal('cover' in off, false);
 });
+
+test('roll is an appear effect, always by letter, with whole turns', async () => {
+  const { readSpec } = await load('spec');
+  const s = readSpec({ items: [{ id: 'n', text: true, appear: { effect: 'roll', split: 'words', turns: 2.6 } }] }, false);
+  assert.equal(s.items[0].appear.effect, 'roll');
+  assert.equal(s.items[0].appear.split, 'chars');
+  assert.equal(s.items[0].appear.turns, 3);
+  const plain = readSpec({ items: [{ id: 'n', appear: { effect: 'fade' } }] }, false);
+  assert.equal('turns' in plain.items[0].appear, false);
+});
+
+test('loop: defaults, clamps, and nothing without one', async () => {
+  const { readSpec } = await load('spec');
+  const s = readSpec({ items: [{ id: 'm', loop: { to: { x: -640 }, duration: 12.8 } }, { id: 'r', loop: { to: { rotate: 360 }, duration: 0, yoyo: 1 } }, { id: 'n' }] }, false);
+  assert.equal(s.items[0].loop.to.x, -640);
+  assert.equal(s.items[0].loop.from.x, 0);
+  assert.equal(s.items[0].loop.duration, 12.8);
+  assert.equal(s.items[0].loop.ease, 'linear');
+  assert.equal(s.items[0].loop.yoyo, false);
+  assert.equal(s.items[1].loop.duration, 0.05);
+  assert.equal(s.items[1].loop.yoyo, true);
+  assert.equal(s.items[2].loop, undefined);
+});

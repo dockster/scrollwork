@@ -10,7 +10,32 @@ const ONS: readonly FxOn[] = ['hover', 'appear', 'always', 'scroll'];
 /** What each effect is when nothing but its type is written. */
 export const FX_DEFAULTS: { [T in FxType]: Omit<Extract<Fx, { type: T }>, 'type'> } = {
   glitch: { on: 'hover', intensity: 0.6, speed: 1, seed: 0, in: 0.12, out: 0.35, blocks: 24, split: 6 },
+  dither: { on: 'always', intensity: 0.7, speed: 1, seed: 0, in: 0.2, out: 0.6, mode: 'bayer', size: 2, scale: 420, color: '#000000', color2: 'transparent', accent: '#B3FDD0', radius: 90, trail: 0.35 },
 };
+
+/** fields that name one of a few choices */
+const CHOICES: Record<string, readonly string[]> = { mode: ['bayer', 'halftone'] };
+/** fields that hold a colour */
+const COLOURS = new Set(['color', 'color2', 'accent']);
+
+/** A colour as red, green, blue, alpha 0 to 1: #rgb, #rgba, #rrggbb, #rrggbbaa, rgb() and rgba(), or transparent; null for anything else. */
+export function rgbaOf(v: string): [number, number, number, number] | null {
+  const t = v.trim().toLowerCase();
+  if (t === 'transparent') return [0, 0, 0, 0];
+  let m = /^#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/.exec(t);
+  if (m) {
+    let h = m[1];
+    if (h.length <= 4) h = h.split('').map((c) => c + c).join('');
+    const n = (i: number) => parseInt(h.slice(i, i + 2), 16) / 255;
+    return [n(0), n(2), n(4), h.length === 8 ? n(6) : 1];
+  }
+  m = /^rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:\s*[,/]\s*([\d.]+)(%?))?\s*\)$/.exec(t);
+  if (m) {
+    const a = m[4] === undefined ? 1 : parseFloat(m[4]) / (m[5] ? 100 : 1);
+    return [+m[1] / 255, +m[2] / 255, +m[3] / 255, Math.min(1, Math.max(0, a))].map((x) => Math.min(1, Math.max(0, x))) as [number, number, number, number];
+  }
+  return null;
+}
 
 type Loose = Record<string, unknown>;
 const isObj = (v: unknown): v is Loose => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -39,6 +64,10 @@ const RANGES: Record<string, [number, number]> = {
   out: [0, 10],
   blocks: [2, 128],
   split: [0, 64],
+  size: [1, 64],
+  scale: [10, 4000],
+  radius: [0, 2000],
+  trail: [0, 5],
 };
 
 /** One effect, filled in and checked; null when its type is not one this build plays. */
@@ -62,6 +91,20 @@ export function readOneFx(v: unknown, note: (m: string) => void, what: string): 
       else {
         note(`${what}.on: ${JSON.stringify(v.on)} is not one of ${ONS.join(', ')}; using ${String(d)}`);
         out.on = d;
+      }
+    } else if (CHOICES[key]) {
+      const c = v[key] === undefined ? d : v[key];
+      if (typeof c === 'string' && CHOICES[key].includes(c)) out[key] = c;
+      else {
+        note(`${what}.${key}: ${JSON.stringify(v[key])} is not one of ${CHOICES[key].join(', ')}; using ${String(d)}`);
+        out[key] = d;
+      }
+    } else if (COLOURS.has(key)) {
+      const c = v[key] === undefined ? d : v[key];
+      if (typeof c === 'string' && rgbaOf(c)) out[key] = c;
+      else {
+        note(`${what}.${key}: ${JSON.stringify(v[key])} is not a colour scrollwork/fx reads (hex, rgb() or transparent); using ${String(d)}`);
+        out[key] = d;
       }
     } else if (typeof d === 'number') {
       const [lo, hi] = RANGES[key] || [-Infinity, Infinity];

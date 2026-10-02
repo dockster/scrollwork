@@ -26,7 +26,32 @@ export interface GlitchFx extends FxBase {
   split: number;
 }
 
-export type Fx = GlitchFx;
+/**
+ * A field of dots: ordered dithering (bayer) or a halftone screen of a slow
+ * drifting cloud, or of the element's own picture when it has one. The pointer
+ * leaves a trail that thins the dots and tints the paper. Drawn at one bitmap
+ * pixel per CSS pixel and scaled without smoothing, so the dots stay crisp.
+ */
+export interface DitherFx extends FxBase {
+  type: 'dither';
+  mode: 'bayer' | 'halftone';
+  /** px: a bayer cell, or a halftone dot's spacing */
+  size: number;
+  /** px: how large the cloud's shapes are */
+  scale: number;
+  /** the dots, any CSS hex or rgb() colour */
+  color: string;
+  /** between the dots; transparent lets the element's own fill show */
+  color2: string;
+  /** the trail's tint on the paper */
+  accent: string;
+  /** px: the trail's reach around the pointer */
+  radius: number;
+  /** seconds the trail takes to catch up with the pointer */
+  trail: number;
+}
+
+export type Fx = GlitchFx | DitherFx;
 export type FxType = Fx['type'];
 
 /** The picture an effect reads: the host's own, found at mount */

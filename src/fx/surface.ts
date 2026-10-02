@@ -11,6 +11,8 @@
 
 import { program, setUniforms, texture, triangle, type Program } from './gl.js';
 import { GLITCH } from './shaders/glitch.js';
+import { DITHER } from './shaders/dither.js';
+import { rgbaOf } from './spec.js';
 import type { Fx, FxType, TexState } from './types.js';
 import type { Signals } from '../types.js';
 
@@ -51,6 +53,13 @@ export interface Host {
   /** the pointer within the host, 0..1 */
   px: number;
   py: number;
+  /** where the pointer was a moment ago (the trail's tail), 0..1 */
+  lx: number;
+  ly: number;
+  /** drawn one bitmap pixel per CSS pixel and scaled up without smoothing (dither's dots) */
+  crisp: boolean;
+  /** follows the pointer anywhere over it, even under what covers it (a field drawn behind the page) */
+  field: boolean;
   /** the clock when it was added: each host's time starts at 0 */
   t0: number;
   shown: boolean;
@@ -71,10 +80,10 @@ export interface Surface {
   readonly hosts: ReadonlyMap<HTMLElement, Host>;
 }
 
-const SHADERS: Record<FxType, string> = { glitch: GLITCH };
+const SHADERS: Record<FxType, string> = { glitch: GLITCH, dither: DITHER };
 /** effects that leave the picture as it is at k 0: at rest the host's own picture shows and nothing draws */
-const IDLE_IDENTITY: Record<FxType, boolean> = { glitch: true };
-const STYLE = '.ux-motion-fx{position:absolute;inset:0;width:100%;height:100%;border-radius:inherit;pointer-events:none;display:block}';
+const IDLE_IDENTITY: Record<FxType, boolean> = { glitch: true, dither: false };
+const STYLE = '.ux-motion-fx{position:absolute;inset:0;width:100%;height:100%;border-radius:inherit;pointer-events:none;display:block}.ux-motion-fx.is-crisp{image-rendering:pixelated}';
 /** hosts that cannot hold a child canvas */
 const NO_CHILD = /^(IMG|VIDEO|CANVAS|INPUT|TEXTAREA|SELECT|svg|IFRAME|BR|HR)$/;
 
@@ -255,6 +264,43 @@ export function createSurface(o: SurfaceOptions): Surface | null {
   const onVisibility = () => !doc.hidden && wake();
   doc.addEventListener('visibilitychange', onVisibility);
 
+  // A field is usually drawn behind the page's words and pictures, which take
+  // the pointer's events: it follows the pointer over the whole window instead.
+  let pointerOn = false;
+  const onPointer = (ev: PointerEvent) => {
+    for (const h of hosts.values()) {
+      if (!h.field || !h.visible) continue;
+      const b = h.el.getBoundingClientRect();
+      if (!b.width || !b.height) continue;
+      const x = (ev.clientX - b.left) / b.width;
+      const y = (ev.clientY - b.top) / b.height;
+      const inside = x >= 0 && x <= 1 && y >= 0 && y <= 1;
+      if (inside) {
+        // coming back in: the trail starts where the pointer is, not where it left
+        if (h.hoverTo === 0 && h.hover === 0) {
+          h.lx = x;
+          h.ly = y;
+        }
+        h.px = x;
+        h.py = y;
+      }
+      h.hoverTo = inside ? 1 : 0;
+    }
+    wake();
+  };
+  const onPointerOut = (ev: PointerEvent) => {
+    // left the window altogether
+    if (ev.relatedTarget) return;
+    for (const h of hosts.values()) if (h.field) h.hoverTo = 0;
+    wake();
+  };
+  const listenPointer = () => {
+    if (pointerOn) return;
+    pointerOn = true;
+    win.addEventListener('pointermove', onPointer, { passive: true });
+    doc.addEventListener('pointerout', onPointerOut);
+  };
+
   const show = (h: Host) => {
     if (h.shown) return;
     h.view.style.display = '';
@@ -282,7 +328,7 @@ export function createSurface(o: SurfaceOptions): Surface | null {
 
   /** the bitmap's size for a host: its CSS size at device and extra scale, kept within the cap */
   const bitmapSize = (h: Host): [number, number] => {
-    const k = dpr() * scale();
+    const k = (h.crisp ? 1 : dpr()) * scale();
     let w = Math.round(h.w * k);
     let hh = Math.round(h.h * k);
     const m = Math.max(w, hh);
@@ -325,10 +371,14 @@ export function createSurface(o: SurfaceOptions): Surface | null {
       gl.bindTexture(gl.TEXTURE_2D, source);
       const uni = p.uniforms.get('u_tex');
       if (uni) gl.uniform1i(uni, 0);
-      const values: Record<string, number | [number, number]> = {
+      const values: Record<string, number | readonly number[]> = {
         u_res: [w, hh],
         u_fit: i === 0 ? fit : [1, 1],
         u_pointer: [h.px, h.py],
+        u_lag: [h.lx, h.ly],
+        u_hover: h.hover,
+        u_unit: h.w ? w / h.w : 1,
+        u_hasTex: i === 0 ? (h.texState === 'ready' ? 1 : 0) : 1,
         u_time: t,
         u_k: ks[i],
         u_seed: fx.seed,
@@ -338,6 +388,11 @@ export function createSurface(o: SurfaceOptions): Surface | null {
       for (const key in fx) {
         const v = (fx as unknown as Record<string, unknown>)[key];
         if (typeof v === 'number' && !(key in values) && key !== 'seed' && key !== 'intensity' && key !== 'speed') values['u_' + key] = v;
+        else if (typeof v === 'string' && key !== 'type' && key !== 'on') {
+          // a colour as four numbers; a choice as its place in the list (mode: bayer 0, halftone 1)
+          const c = rgbaOf(v);
+          values['u_' + key] = c || (v === 'halftone' ? 1 : 0);
+        }
       }
       setUniforms(gl, p, values);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
@@ -376,6 +431,7 @@ export function createSurface(o: SurfaceOptions): Surface | null {
         el.style.position = 'relative';
       }
       el.appendChild(view);
+      if (fx.some((f) => f.type === 'dither')) view.classList.add('is-crisp');
       const r = el.getBoundingClientRect();
       const h: Host = {
         el,
@@ -394,6 +450,10 @@ export function createSurface(o: SurfaceOptions): Surface | null {
         hoverTo: 0,
         px: 0.5,
         py: 0.5,
+        lx: 0.5,
+        ly: 0.5,
+        crisp: fx.some((f) => f.type === 'dither'),
+        field: fx.some((f) => f.type === 'dither'),
         t0: win.performance.now(),
         shown: false,
         position,
@@ -426,6 +486,7 @@ export function createSurface(o: SurfaceOptions): Surface | null {
         wake();
       });
       hosts.set(el, h);
+      if (h.field) listenPointer();
       io?.observe(el);
       ro?.observe(el);
       loadPicture(h);
@@ -451,6 +512,17 @@ export function createSurface(o: SurfaceOptions): Surface | null {
         if (h.hover !== h.hoverTo) {
           h.hover = approach(h.hover, h.hoverTo, h.hoverTo > h.hover ? h.fx[0].in : h.fx[0].out, dt);
           if (h.hover !== h.hoverTo) moving = true;
+        }
+        if (h.field && (h.lx !== h.px || h.ly !== h.py)) {
+          // the trail's tail catches up with the pointer over `trail` seconds
+          const lag = (h.fx.find((f) => f.type === 'dither') as { trail?: number } | undefined)?.trail ?? 0.35;
+          const keep = lag > 0 ? Math.pow(0.01, dt / (lag * 1000)) : 0;
+          h.lx = h.px + (h.lx - h.px) * keep;
+          h.ly = h.py + (h.ly - h.py) * keep;
+          if (Math.abs(h.lx - h.px) + Math.abs(h.ly - h.py) < 0.0005) {
+            h.lx = h.px;
+            h.ly = h.py;
+          } else moving = true;
         }
         if (reduced || !h.visible || !h.w || !h.h || h.texState === 'failed' || h.texState === 'loading' || doc.hidden) {
           hide(h);
@@ -495,6 +567,10 @@ export function createSurface(o: SurfaceOptions): Surface | null {
       for (const el of Array.from(hosts.keys())) this.remove(el);
       io?.disconnect();
       ro?.disconnect();
+      if (pointerOn) {
+        win.removeEventListener('pointermove', onPointer);
+        doc.removeEventListener('pointerout', onPointerOut);
+      }
       dprQuery?.removeEventListener('change', onDpr);
       doc.removeEventListener('visibilitychange', onVisibility);
       for (const t of targets) {

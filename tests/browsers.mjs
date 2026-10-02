@@ -734,6 +734,122 @@ for (const name of BROWSERS) {
     await ctx.close();
   }
 
+  // ── roll: each digit is a wheel that lands on its value; the words stay the words (1.9.0) ──
+  {
+    const { p, ctx, errors } = await page(browser, `<div style="height:20px"></div><p id="n" style="font:48px/1.1 sans-serif" data-scrollwork='{"text":true,"appear":{"effect":"roll","duration":0.6,"stagger":0.05,"offset":0}}'>$1M-2M 500+</p><div style="height:1500px"></div>`, { counting: true });
+    await p.evaluate(() => (window.sw = window.Scrollwork.auto()));
+    const early = await p.evaluate(() => ({ cols: document.querySelectorAll('#n .ux-motion-roll').length, rows: Array.from(document.querySelectorAll('#n .ux-motion-roll')).map((c) => c.children.length), said: document.querySelector('#n .ux-motion-said')?.textContent }));
+    check(tag('roll: one wheel per digit, as long as a turn and the digit; the whole text said once'), early.cols === 5 && early.rows.join(',') === '13,14,17,12,12' && early.said === '$1M-2M 500+', JSON.stringify(early));
+    await sleep(1400);
+    const landed = await p.evaluate(() =>
+      Array.from(document.querySelectorAll('#n .ux-motion-roll')).map((c) => {
+        const win = c.parentElement.getBoundingClientRect();
+        const row = Array.from(c.children).find((r) => Math.abs(r.getBoundingClientRect().top - win.top) < 2);
+        return row ? row.textContent : '?';
+      }).join('')
+    );
+    check(tag('roll: every wheel shows its own digit at the end'), landed === '12500', landed);
+    const back = await p.evaluate(() => {
+      window.sw.stop();
+      return { html: document.getElementById('n').innerHTML, text: document.getElementById('n').textContent };
+    });
+    check(tag('roll: stop() gives the text back as it was'), back.html === '$1M-2M 500+', back.html);
+    check(tag('no errors (roll)'), errors.length === 0, errors.join(' | '));
+    await ctx.close();
+  }
+
+  // ── loop: plays while on screen, rests off it, nothing under reduced motion (1.9.0) ──
+  {
+    const body = `<div id="m" style="width:200px;height:40px;background:#123" data-scrollwork='{"loop":{"to":{"x":-100},"duration":1}}'></div><div style="height:3000px"></div>`;
+    const { p, ctx, errors } = await page(browser, body, { counting: true });
+    await p.evaluate(() => (window.sw = window.Scrollwork.auto()));
+    await sleep(300);
+    const xs = [];
+    for (let i = 0; i < 4; i++) {
+      xs.push(await p.evaluate(() => document.getElementById('m').getBoundingClientRect().left));
+      await sleep(170);
+    }
+    const moved = xs.some((x, i) => i && x !== xs[i - 1]);
+    check(tag('loop: the element keeps moving'), moved && xs.every((x) => x <= 0.5 && x >= -100.5), xs.map((x) => x.toFixed(1)).join(' '));
+    await p.evaluate(() => window.scrollTo(0, 2000));
+    await sleep(500);
+    const f0 = await p.evaluate(() => window.__frames);
+    await sleep(600);
+    const f1 = await p.evaluate(() => window.__frames);
+    check(tag('loop: scrolled away, the loop rests'), f1 - f0 <= 3, `${f1 - f0} frames`);
+    const after = await p.evaluate(() => {
+      window.sw.stop();
+      const el = document.getElementById('m');
+      return { translate: el.style.translate, left: el.getBoundingClientRect().left };
+    });
+    check(tag('loop: stop() puts the element back'), after.translate === '' && after.left === 0, JSON.stringify(after));
+    check(tag('no errors (loop)'), errors.length === 0, errors.join(' | '));
+    await ctx.close();
+    const r = await page(browser, body, { reduced: true });
+    await r.p.evaluate(() => (window.sw = window.Scrollwork.auto()));
+    await sleep(500);
+    const still = await r.p.evaluate(() => document.getElementById('m').getBoundingClientRect().left);
+    check(tag('loop: reduced motion holds it at rest'), still === 0, String(still));
+    await r.ctx.close();
+  }
+
+  // ── scrollwork/fx dither: a crisp field of dots that the pointer thins out (1.9.0) ──
+  {
+    const fxScript = '<script src="/scrollwork.min.js"></script><script src="/scrollwork-fx.min.js"></script>';
+    const body = `<div id="d" style="position:relative;width:400px;height:300px;background:#fff" data-scrollwork='{"fx":[{"type":"dither","intensity":1,"radius":80,"trail":0.05,"in":0.05}]}'><p id="over" style="position:absolute;inset:0;margin:0">words over the field</p></div><div style="height:1500px"></div>`;
+    const { p, ctx, errors } = await page(browser, body, { counting: true, script: fxScript });
+    const able = await p.evaluate(() => {
+      const can = typeof OffscreenCanvas !== 'undefined' && !!new OffscreenCanvas(1, 1).getContext('webgl2') && !!document.createElement('canvas').getContext('bitmaprenderer');
+      window.sw = window.Scrollwork.auto(document.body, { plugins: [window.ScrollworkFx.fx] });
+      return can;
+    });
+    if (!able) check(tag('dither: no WebGL2 here, the page plays without it'), errors.length === 0, errors.join(' | '));
+    else {
+      await sleep(400);
+      const v = await p.evaluate(() => {
+        const c = document.querySelector('#d > canvas.ux-motion-fx');
+        return { shown: getComputedStyle(c).display, crisp: c.classList.contains('is-crisp'), w: c.width, h: c.height };
+      });
+      check(tag('dither: draws at one bitmap pixel per CSS pixel, crisp'), v.shown === 'block' && v.crisp && v.w === 400 && v.h === 300, JSON.stringify(v));
+      const ink = (x0, y0, size) =>
+        p.evaluate(([x0, y0, size]) => {
+          const v = document.querySelector('#d > canvas.ux-motion-fx');
+          const c = document.createElement('canvas');
+          c.width = v.width;
+          c.height = v.height;
+          const g = c.getContext('2d');
+          g.drawImage(v, 0, 0);
+          const d = g.getImageData(x0, y0, size, size).data;
+          let dark = 0, tint = 0;
+          for (let i = 0; i < d.length; i += 4) {
+            if (d[i + 3] > 200 && d[i] < 40 && d[i + 1] < 40) dark++;
+            if (d[i + 3] > 20 && d[i + 1] > d[i] + 10) tint++;
+          }
+          return { dark: dark / (size * size), tint: tint / (size * size) };
+        }, [x0, y0, size]);
+      const before = await ink(170, 120, 60);
+      check(tag('dither: only dots and clear paper, some of them inked'), before.dark > 0.05 && before.dark < 0.95, JSON.stringify(before));
+      const f0 = await p.evaluate(() => window.__frames);
+      await sleep(400);
+      const f1 = await p.evaluate(() => window.__frames);
+      check(tag('dither: always on, the cloud keeps drifting'), f1 - f0 > 8, `${f1 - f0} frames`);
+      // the words cover the field: the pointer still reaches it
+      await p.mouse.move(200, 150);
+      await sleep(250);
+      await p.mouse.move(201, 151);
+      await sleep(250);
+      const near = await ink(170, 120, 60);
+      check(tag('dither: under the pointer, through what covers it, the dots thin and the paper takes the accent'), near.dark < before.dark * 0.9 && near.tint > 0.2, JSON.stringify({ before, near }));
+      const after = await p.evaluate(() => {
+        window.sw.stop();
+        return document.querySelectorAll('canvas.ux-motion-fx').length;
+      });
+      check(tag('dither: stop() removes the view'), after === 0, String(after));
+    }
+    check(tag('no errors (dither)'), errors.length === 0, errors.join(' | '));
+    await ctx.close();
+  }
+
   await browser.close();
 }
 

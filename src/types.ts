@@ -46,7 +46,8 @@ export interface MotionKey {
   state: MotionState;
 }
 
-export type AppearEffect = 'fade' | 'slide-up' | 'mask' | 'blur' | 'scale' | 'custom';
+/** `roll`: text only, each digit rolls up a column of digits to its value (an odometer); the other characters slide up through a mask */
+export type AppearEffect = 'fade' | 'slide-up' | 'mask' | 'blur' | 'scale' | 'custom' | 'roll';
 export type TextSplit = 'none' | 'lines' | 'words' | 'chars';
 
 /** Appear: plays once the element (or its trigger) comes into view. */
@@ -71,6 +72,28 @@ export interface AppearMotion {
   keys?: MotionKey[];
   /** another element whose arrival starts it; the element itself when unset */
   trigger?: string;
+  /** roll: how many times each digit goes round 0 to 9 before landing on its value (1 when unset) */
+  turns?: number;
+}
+
+/**
+ * Loop: the element moves from one state to another over and over, for as
+ * long as the page is open (a marquee, a slow spin, a pulse). It plays only
+ * while the element is on screen, and not at all under reduced motion.
+ */
+export interface LoopMotion {
+  /** where each turn starts; the element at rest when unset */
+  from: MotionState;
+  to: MotionState;
+  /** seconds per turn */
+  duration: number;
+  ease: MotionEase;
+  /** go there and back (from, to, from) instead of starting over at `from` */
+  yoyo: boolean;
+  /** seconds before the first turn */
+  delay: number;
+  /** steps between `from` and `to` */
+  keys?: MotionKey[];
 }
 
 export type ScrollRange = 'through' | 'in' | 'out';
@@ -185,6 +208,7 @@ export interface MotionItem {
   appear?: AppearMotion;
   scroll?: ScrollMotion;
   pin?: PinMotion;
+  loop?: LoopMotion;
   interactions?: Interaction[];
   /** effects played by a plugin given to `start()` (scrollwork/fx); nothing without one */
   fx?: FxSpec[];
