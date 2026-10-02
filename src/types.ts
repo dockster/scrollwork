@@ -166,6 +166,16 @@ export interface Interaction {
   animation: InteractionAnimation;
 }
 
+/**
+ * An effect for a plugin (scrollwork/fx): the core carries it through as
+ * written and the plugin reads it. `on` says what drives it.
+ */
+export interface FxSpec {
+  type: string;
+  on?: 'hover' | 'appear' | 'always' | 'scroll';
+  [key: string]: unknown;
+}
+
 /** One element's motion. */
 export interface MotionItem {
   /** the value of the `attr` option on the element */
@@ -176,6 +186,49 @@ export interface MotionItem {
   scroll?: ScrollMotion;
   pin?: PinMotion;
   interactions?: Interaction[];
+  /** effects played by a plugin given to `start()` (scrollwork/fx); nothing without one */
+  fx?: FxSpec[];
+}
+
+/** What the engine knows about an element this frame, for a plugin. */
+export interface Signals {
+  /** appear progress 0 to 1; 1 when it has no appear, or under reduced motion */
+  appear: number;
+  /** how far through its scroll range, 0 to 1; 0 without a scroll motion */
+  scroll: number;
+  /** the picture a state is moving to, and how far along (the swap shows at 0.5); null when none */
+  image: { url: string; k: number } | null;
+  /** the page's scroll speed, px per second, positive downwards, smoothed */
+  velocity: number;
+  /** the frame's clock (ms) and the time since the last frame (ms) */
+  now: number;
+  dt: number;
+}
+
+export interface PluginContext {
+  root: HTMLElement;
+  win: Window;
+  /** the engine is driven by seek(): there is no loop of its own */
+  seekOnly: boolean;
+  /** the elements the spec names that were found, with their items */
+  items: Array<{ item: MotionItem; el: HTMLElement }>;
+  /** whether the reader asked for less motion, now */
+  reduced(): boolean;
+  /** ask for a frame: something changed that the engine does not know about (a pointer moved) */
+  wake(): void;
+}
+
+export interface PluginHandle {
+  /** called at the end of every frame the engine draws; return true while something is still in flight, to keep the loop awake */
+  frame(read: (el: HTMLElement) => Signals, now: number, dt: number): boolean;
+  stop(): void;
+}
+
+/** Something that plays alongside the engine, on the elements it moves (scrollwork/fx). */
+export interface Plugin {
+  name: string;
+  /** null when it cannot run here (no WebGL): the page plays without it */
+  mount(ctx: PluginContext): PluginHandle | null;
 }
 
 /** A page's motion. */
@@ -224,6 +277,8 @@ export interface MotionOptions {
    * Without this option, custom actions do nothing.
    */
   custom?: (name: string, data: unknown, ix: Interaction, phase: 'start' | 'end') => void;
+  /** plugins mounted with the engine (scrollwork/fx); each sees every frame */
+  plugins?: Plugin[];
 }
 
 export interface MotionControl {

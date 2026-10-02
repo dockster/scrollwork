@@ -1,6 +1,6 @@
 {
   "name": "scrollwork",
-  "version": "1.7.0",
+  "version": "1.8.0",
   "description": "Scroll, appear, pin and interaction motion for the web, from JSON or data attributes, plus animate(), inView() and scroll(). A few KB, no dependencies, respects reduced motion.",
   "type": "module",
   "main": "./dist/scrollwork.mjs",
@@ -18,6 +18,17 @@
     "./global.min": {
       "default": "./dist/scrollwork.min.js"
     },
+    "./fx": {
+      "types": "./dist/fx/index.d.ts",
+      "import": "./dist/fx.mjs",
+      "default": "./dist/fx.mjs"
+    },
+    "./fx/global": {
+      "default": "./dist/scrollwork-fx.js"
+    },
+    "./fx/global.min": {
+      "default": "./dist/scrollwork-fx.min.js"
+    },
     "./package.json": "./package.json"
   },
   "unpkg": "./dist/scrollwork.min.js",
@@ -30,7 +41,9 @@
   ],
   "sideEffects": [
     "./dist/scrollwork.js",
-    "./dist/scrollwork.min.js"
+    "./dist/scrollwork.min.js",
+    "./dist/scrollwork-fx.js",
+    "./dist/scrollwork-fx.min.js"
   ],
   "scripts": {
     "build": "node scripts/build.mjs",

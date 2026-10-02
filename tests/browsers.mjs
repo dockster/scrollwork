@@ -41,7 +41,7 @@ const page = async (browser, body, { reduced = false, counting = false, head = '
     const path = new URL(route.request().url()).pathname;
     if (path === '/') return route.fulfill({ contentType: 'text/html', body: html });
     const file = path.slice(1);
-    if (['scrollwork.min.js', 'scrollwork.js', 'scrollwork.mjs'].includes(file)) return route.fulfill({ contentType: 'text/javascript', body: DIST(file) });
+    if (['scrollwork.min.js', 'scrollwork.js', 'scrollwork.mjs', 'scrollwork-fx.min.js', 'scrollwork-fx.js', 'fx.mjs'].includes(file)) return route.fulfill({ contentType: 'text/javascript', body: DIST(file) });
     return route.fulfill({ status: 404, body: '' });
   });
   await p.goto(`${ORIGIN}/`);
@@ -653,6 +653,84 @@ for (const name of BROWSERS) {
     check(tag('a missing variable takes its fallback: 0.2s is done'), o.f > 0.98, String(o.f));
     check(tag('a bezier token plays as a curve, with no warning'), !warnings.some((w) => /--ease-brand|--dur/.test(w)), warnings.join(' | '));
     check(tag('no errors (variables)'), errors.length === 0, errors.join(' | '));
+    await ctx.close();
+  }
+
+  // ── scrollwork/fx: glitch on hover draws inside the host, rests, and leaves nothing behind (1.8.0) ──
+  {
+    const fxScript = '<script src="/scrollwork.min.js"></script><script src="/scrollwork-fx.min.js"></script>';
+    const body = `<div style="height:40px"></div>
+      <div id="h" style="width:300px;height:200px;background:url(PICTURE) center / cover" data-scrollwork='{"fx":[{"type":"glitch","intensity":1,"in":0.05,"out":0.05}]}'></div>
+      <div id="a" style="width:300px;height:200px;margin-top:40px;background:url(PICTURE) center / cover" data-scrollwork='{"fx":[{"type":"glitch","on":"always"}]}'></div>
+      <div style="height:1200px"></div>`;
+    // a picture the page draws itself: a two-colour gradient, so a read-back can tell a frame from nothing
+    const picture = `<script>(() => { const c = document.createElement('canvas'); c.width = 60; c.height = 40; const x = c.getContext('2d'); const gr = x.createLinearGradient(0, 0, 60, 0); gr.addColorStop(0, '#1b4fd8'); gr.addColorStop(1, '#f2b134'); x.fillStyle = gr; x.fillRect(0, 0, 60, 40); window.__pic = c.toDataURL(); })();</script>`;
+    const { p, ctx, errors } = await page(browser, picture + body.replace(/PICTURE/g, '') , { counting: true, script: fxScript });
+    const able = await p.evaluate(() => {
+      for (const el of document.querySelectorAll('#h, #a')) el.style.backgroundImage = `url(${window.__pic})`;
+      const can = typeof OffscreenCanvas !== 'undefined' && !!new OffscreenCanvas(1, 1).getContext('webgl2') && !!document.createElement('canvas').getContext('bitmaprenderer');
+      window.sw = window.Scrollwork.auto(document.body, { plugins: [window.ScrollworkFx.fx] });
+      return can;
+    });
+    if (!able) {
+      check(tag('fx: no WebGL2 here, the page plays without it'), errors.length === 0, errors.join(' | '));
+    } else {
+      await sleep(400);
+      const views = await p.evaluate(() => ({
+        h: document.querySelectorAll('#h > canvas.ux-motion-fx').length,
+        a: document.querySelectorAll('#a > canvas.ux-motion-fx').length,
+        hShown: getComputedStyle(document.querySelector('#h > canvas.ux-motion-fx')).display,
+        aShown: getComputedStyle(document.querySelector('#a > canvas.ux-motion-fx')).display,
+        pos: getComputedStyle(document.getElementById('h')).position,
+      }));
+      check(tag('fx: each host holds one view canvas; at rest a hover effect shows nothing, an always-on one draws'), views.h === 1 && views.a === 1 && views.hShown === 'none' && views.aShown === 'block' && views.pos === 'relative', JSON.stringify(views));
+      const f0 = await p.evaluate(() => window.__frames);
+      await sleep(500);
+      const f1 = await p.evaluate(() => window.__frames);
+      check(tag('fx: an always-on effect keeps the loop awake'), f1 - f0 > 10, `${f1 - f0} frames in half a second`);
+      // the frame has colour in it: the picture was read and drawn, not left blank
+      const px = await p.evaluate(() => {
+        const v = document.querySelector('#a > canvas.ux-motion-fx');
+        const c = document.createElement('canvas'); c.width = v.width; c.height = v.height;
+        const x = c.getContext('2d'); x.drawImage(v, 0, 0);
+        const d = x.getImageData(0, 0, c.width, c.height).data;
+        let lit = 0; for (let i = 3; i < d.length; i += 4) if (d[i] > 0) lit++;
+        return { lit: lit / (d.length / 4), w: v.width, h: v.height };
+      });
+      check(tag('fx: the drawn frame is a picture, sized to the host at device pixels'), px.lit > 0.95 && px.w >= 300 && px.h >= 200, JSON.stringify(px));
+      await p.mouse.move(150, 140);
+      await sleep(300);
+      const hovered = await p.evaluate(() => getComputedStyle(document.querySelector('#h > canvas.ux-motion-fx')).display);
+      check(tag('fx: hovering draws the effect over the host'), hovered === 'block', hovered);
+      await p.mouse.move(800, 600);
+      await sleep(400);
+      const left = await p.evaluate(() => getComputedStyle(document.querySelector('#h > canvas.ux-motion-fx')).display);
+      check(tag('fx: leaving hides it again, the picture itself shows'), left === 'none', left);
+      // out of view, an always-on effect rests
+      await p.evaluate(() => window.scrollTo(0, 1400));
+      await sleep(600);
+      const g0 = await p.evaluate(() => window.__frames);
+      await sleep(600);
+      const g1 = await p.evaluate(() => window.__frames);
+      check(tag('fx: scrolled away, the loop rests'), g1 - g0 <= 3, `${g1 - g0} frames in 0.6s`);
+      const after = await p.evaluate(() => {
+        window.sw.stop();
+        return { views: document.querySelectorAll('canvas.ux-motion-fx').length, pos: document.getElementById('h').style.position, style: !!document.querySelector('style[data-scrollwork-fx]') };
+      });
+      check(tag('fx: stop() removes the views and gives the host its position back'), after.views === 0 && after.pos === '' && after.style, JSON.stringify(after));
+    }
+    check(tag('no errors (fx)'), errors.length === 0, errors.join(' | '));
+    await ctx.close();
+  }
+
+  // ── scrollwork/fx under reduced motion: nothing draws ──
+  {
+    const fxScript = '<script src="/scrollwork.min.js"></script><script src="/scrollwork-fx.min.js"></script>';
+    const { p, ctx, errors } = await page(browser, `<div id="a" style="width:200px;height:100px;background:#246 url(data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==) center / cover" data-scrollwork='{"fx":[{"type":"glitch","on":"always"}]}'></div>`, { reduced: true, script: fxScript });
+    await p.evaluate(() => (window.sw = window.Scrollwork.auto(document.body, { plugins: [window.ScrollworkFx.fx] })));
+    await sleep(400);
+    const shown = await p.evaluate(() => Array.from(document.querySelectorAll('canvas.ux-motion-fx')).filter((v) => getComputedStyle(v).display !== 'none').length);
+    check(tag('fx: reduced motion shows the picture as it is'), shown === 0 && errors.length === 0, `${shown} drawn, ${errors.join(' | ')}`);
     await ctx.close();
   }
 

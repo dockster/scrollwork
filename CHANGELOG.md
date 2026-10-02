@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.8.0 (2026-10-02)
+
+- `scrollwork/fx`: WebGL effects on the elements Scrollwork moves, in a file
+  of their own (`dist/fx.mjs`, `dist/scrollwork-fx.min.js`, about 6 KB
+  gzipped). An item's `fx` is a list of effects; the first is `glitch`
+  (blocks of the picture shift and the colours split, on hover by default).
+  One WebGL2 context draws every effect, each shown through a small canvas
+  inside its element, so the effect keeps the element's radius, stacking,
+  scroll and transforms. Without WebGL2, under reduced motion, or when the
+  picture cannot be read (no CORS), the element shows its picture as it is.
+- `plugins` on `start()` and `auto()`: something that plays alongside the
+  engine, mounted on the elements found and called at the end of every frame
+  with each element's signals (appear progress, scroll progress, the picture
+  in flight, the scroll speed). The engine measures the scroll speed now, for
+  plugins, and keeps the loop awake while it settles.
+- The spec carries an item's `fx` through unread (an entry without a `type`
+  is dropped and said), for a plugin to read.
+- The build has a size budget per minified file and fails over it; the README
+  says the measured size (about 17 KB gzipped for the core) instead of the 10 KB
+  it had kept saying.
+
 ## 1.7.0 (2026-10-01)
 
 - `scroll.cover`: a parallax that keeps covering its parent. The element is

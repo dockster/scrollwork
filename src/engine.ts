@@ -10,7 +10,7 @@
 
 import { bezier, clamp01, EASES, spring } from './easing.js';
 import { combine, identity, mix, NONE, paint, parseColour, putInline, BLANK, readBase, release, type Base, type State } from './style.js';
-import type { AppearMotion, Interaction, InteractionAnimation, MotionControl, MotionItem, MotionKey, MotionOptions, MotionSpec, MotionState } from './types.js';
+import type { AppearMotion, Interaction, InteractionAnimation, MotionControl, MotionItem, MotionKey, MotionOptions, MotionSpec, MotionState, PluginHandle, Signals } from './types.js';
 
 export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionControl {
   type Unit = { el: HTMLElement; index: number };
@@ -31,6 +31,8 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
     pinOffset: number;
     /** Change to, one per interaction: how far along (p) and where it is heading (to) */
     changes: Array<{ ix: Interaction; p: number; to: number; timer: number }>;
+    /** what this frame drew, for plugins: appear progress, scroll progress, the picture in flight */
+    sig: { appear: number; scroll: number; image: { url: string; k: number } | null };
   };
 
   const root = opts.root;
@@ -244,6 +246,7 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
       t0: 0,
       pinOffset: 0,
       changes: (item.interactions || []).filter((ix) => ix.action.type === 'change').map((ix) => ({ ix, p: 0, to: 0, timer: 0 })),
+      sig: { appear: 1, scroll: 0, image: null },
     };
     entries.push(entry);
     byEl.set(el, entry);
@@ -651,10 +654,12 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
           end = sc.range === 'in' ? T + H / 2 - vh / 2 : T + H;
         }
         const k = clamp01((y - start) / Math.max(1, end - start));
+        e.sig.scroll = k;
         own = combine(own, timeline(asState(sc.from), sc.keys, asState(sc.to), k, EASES.linear));
       }
 
       const a = it.appear;
+      e.sig.appear = 1;
       if (a) {
         const trig = triggerOf(e, a.trigger);
         const screenTop = topOf(trig) - y;
@@ -690,6 +695,7 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
           if (e.played && k < 1) moving = true;
           own = combine(own, timeline(appearFrom(a, false), a.keys, identity(), k, ease));
         }
+        e.sig.appear = progress(0);
       }
       if (now !== null) {
         for (const c of e.changes) {
@@ -699,10 +705,36 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
           if (c.p > 0 && c.ix.action.type === 'change') own = combine(own, mix(identity(), asState(c.ix.action.state), curveOf(anim)(c.p)));
         }
       }
+      e.sig.image = own.image;
       paint(e.el, own, e.base);
+    }
+    // plugins draw last, over what was painted; one still in flight keeps the loop awake
+    if (handles.length) {
+      const read = (el: HTMLElement): Signals => {
+        const e = byEl.get(el);
+        const s = e ? e.sig : { appear: 1, scroll: 0, image: null };
+        return { appear: s.appear, scroll: s.scroll, image: s.image, velocity, now: now ?? 0, dt };
+      };
+      for (const h of handles) if (h.frame(read, now ?? 0, dt)) moving = true;
     }
     return moving;
   };
+
+  // ── plugins: mounted on the elements found, drawn at the end of every frame ──
+  /** px per second, kept for the plugins' Signals */
+  let velocity = 0;
+  const handles: PluginHandle[] = [];
+  for (const plugin of opts.plugins || []) {
+    const h = plugin.mount({
+      root,
+      win,
+      seekOnly: !!opts.seekOnly,
+      items: entries.map((e) => ({ item: e.item, el: e.el })),
+      reduced: () => reduced,
+      wake: touch,
+    });
+    if (h) handles.push(h);
+  }
 
   // ── the live loop, with optional smooth scrolling ──
   let raf = 0;
@@ -788,6 +820,15 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
     }
     const y = scrollY();
     const vh = viewH();
+    // the scroll speed, for plugins: smoothed over about a tenth of a second, so a
+    // wheel's steps read as one movement; it eases back to rest after the last step
+    if (handles.length && dt > 0) {
+      const raw = lastY < 0 ? 0 : ((y - lastY) / dt) * 1000;
+      const keep = Math.pow(0.001, dt / 300);
+      velocity = velocity * keep + raw * (1 - keep);
+      if (Math.abs(velocity) < 2) velocity = 0;
+      else dirty = true;
+    }
     // nothing in flight, nothing scrolled, nothing touched: skip the pass
     if (dirty || moving || tween || gliding || y !== lastY || vh !== lastVh) {
       moving = render(y, vh, now, dt);
@@ -1190,6 +1231,8 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
       if (ro) ro.disconnect();
       if (mo) mo.disconnect();
       for (const off of unlisten.splice(0)) off();
+      // plugins leave first: what they added to an element goes before the element is given back
+      for (const h of handles.splice(0)) h.stop();
       for (const e of entries) {
         // the author's inline values come back, not blanks
         release(e.el, e.base.inline);

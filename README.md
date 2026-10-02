@@ -4,8 +4,9 @@ Scroll, appear, pin and interaction motion for the web. Describe it in HTML
 with a `data-scrollwork` attribute, or in code with `animate()`, `inView()`
 and `scroll()`.
 
-- **About 10 KB gzipped, no dependencies.** One file for a `<script>` tag, or
-  an ES module for your bundler, with TypeScript types.
+- **About 17 KB gzipped, no dependencies.** One file for a `<script>` tag, or
+  an ES module for your bundler, with TypeScript types. WebGL effects are a
+  separate, optional file (`scrollwork/fx`, about 6 KB).
 - **Declarative first.** Text that rises line by line, parallax, pinned
   sections and hover states come from data, not code.
 - **Leaves your styles alone.** Motion is added to what the element already
@@ -148,6 +149,38 @@ in time, and the call says whether anything is still in flight.
 (`ease-in-sine` to `ease-in-out-bounce`), a cubic bezier `[x1, y1, x2, y2]`,
 a spring (`spring(600, 15, 1).ease`), or your own function. `cssEase(name)`
 writes a named curve as CSS.
+
+## Effects (scrollwork/fx)
+
+Shader effects on the elements Scrollwork moves, in a file of their own that
+only pages using one load. Opt in by handing the plugin to the engine:
+
+```html
+<img-like div data-scrollwork='{"fx": [{"type": "glitch"}]}' style="background: url(hero.jpg) center / cover"></div>
+<script src="scrollwork.min.js"></script>
+<script src="scrollwork-fx.min.js"></script>
+<script>window.scrollwork = Scrollwork.auto(document.body, { plugins: [ScrollworkFx.fx] })</script>
+```
+
+```js
+import { auto } from 'scrollwork';
+import { fx } from 'scrollwork/fx';
+auto(document.body, { plugins: [fx] });
+```
+
+`fx` is a list; each effect has a `type` and an `on` (`hover`, the default
+for most, `appear`, `always` or `scroll`, the scroll speed), an `intensity`
+(0 to 1), a `speed` and the fields of its own in
+[docs/REFERENCE.md](docs/REFERENCE.md#fx). The effect reads the element's own
+picture (its `background-image`) and draws over it inside the element, under
+its border radius and in its stacking order, from one WebGL2 context for the
+whole page. Without WebGL2, under reduced motion, or when the picture is served
+without CORS headers, the element shows its picture as it is: nothing goes
+blank. An element that cannot hold a child (`<img>`, `<video>`) is left alone;
+put the picture on a `<div>`'s background instead.
+
+Effects: `glitch` (blocks of the picture shift and the colours split while
+hovering). More follow.
 
 ## Accessibility
 

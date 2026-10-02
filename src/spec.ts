@@ -6,7 +6,7 @@
 import { SPEC_VERSION } from './types.js';
 import { EASINGS } from './easing.js';
 import { resolveVars } from './vars.js';
-import type { AppearMotion, Interaction, InteractionAnimation, MotionEase, MotionItem, MotionKey, MotionSpec, MotionState, PinMotion, ScrollMotion } from './types.js';
+import type { AppearMotion, FxSpec, Interaction, InteractionAnimation, MotionEase, MotionItem, MotionKey, MotionSpec, MotionState, PinMotion, ScrollMotion } from './types.js';
 
 export const EASES: readonly MotionEase[] = ['smooth', 'out', 'in-out', 'expo', 'back', 'linear', 'in', 'in-back', 'in-out-back', ...EASINGS];
 const EFFECTS = ['fade', 'slide-up', 'mask', 'blur', 'scale', 'custom'] as const;
@@ -251,6 +251,18 @@ export function readItem(v: unknown, notes: Notes, i: number): MotionItem | null
     else {
       const ixs = v.interactions.map((ix, n) => readInteraction(ix, notes, `${what}.interactions[${n}]`, n)).filter((x): x is Interaction => !!x);
       if (ixs.length) item.interactions = ixs;
+    }
+  }
+  // effects are a plugin's to read (scrollwork/fx); the core keeps them as written, each with a type
+  if (v.fx !== undefined) {
+    if (!Array.isArray(v.fx)) notes.add(`${what}.fx: expected a list of effects`);
+    else {
+      const fx = v.fx.filter((f, n) => {
+        const ok = isObj(f) && typeof f.type === 'string' && !!f.type;
+        if (!ok) notes.add(`${what}.fx[${n}]: expected an object with a "type"`);
+        return ok;
+      }) as FxSpec[];
+      if (fx.length) item.fx = fx;
     }
   }
   return item;

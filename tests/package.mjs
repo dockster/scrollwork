@@ -39,6 +39,11 @@ writeFileSync(join(dir, 'cjs.cjs'), `const s = require('scrollwork'); console.lo
 const cjs = run(['cjs.cjs']);
 check('require() resolves it', cjs.ok && cjs.out.trim() === 'function', cjs.out.trim().slice(0, 160));
 
+// the effects add-on: a subpath of its own, importable where there is no window, and without a second engine inside
+writeFileSync(join(dir, 'fx.mjs'), `import { fx, readFx, FX_DEFAULTS, version } from 'scrollwork/fx'; import { version as core } from 'scrollwork'; console.log(fx.name, typeof readFx, typeof FX_DEFAULTS.glitch, version === core);`);
+const fxm = run(['fx.mjs']);
+check('scrollwork/fx imports without a DOM, at the core version', fxm.ok && fxm.out.trim() === 'fx function object true', fxm.out.trim().slice(0, 160));
+
 writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'consumer', type: 'module', private: true }));
 writeFileSync(
   join(dir, 'tsconfig.json'),
@@ -47,13 +52,15 @@ writeFileSync(
 writeFileSync(
   join(dir, 'use.ts'),
   `import { animate, start, type MotionSpec, type Controls } from 'scrollwork';
-const spec: MotionSpec = { items: [{ id: 'a', text: false }], smooth: false };
+import { fx, type Fx } from 'scrollwork/fx';
+const spec: MotionSpec = { items: [{ id: 'a', text: false, fx: [{ type: 'glitch', on: 'hover' }] }], smooth: false };
+const one: Fx = { type: 'glitch', on: 'hover', intensity: 1, speed: 1, seed: 0, in: 0.1, out: 0.3, blocks: 24, split: 6 };
 const c: Controls = animate('.a', { y: [40, 0] }, { duration: 0.4 });
 const n: number = c.progress;
-start(spec, { attr: 'data-m', root: document.body, scroller: null, reduced: false, split: true });
+start(spec, { attr: 'data-m', root: document.body, scroller: null, reduced: false, split: true, plugins: [fx] });
 // @ts-expect-error progress is a number: types that resolved to any would let this through
 const wrong: string = c.progress;
-export { n, wrong };
+export { n, wrong, one };
 `
 );
 const tsc = run([join(dir, 'node_modules', 'typescript', 'bin', 'tsc'), '-p', 'tsconfig.json']);

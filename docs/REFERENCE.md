@@ -184,6 +184,41 @@ something Scrollwork cannot play, such as a `linear()` curve:
 `"var(--ease-bounce, ease-out-bounce)"`. With neither, the field takes its
 default, and the console says why.
 
+## fx
+
+Effects drawn by the optional add-on, `scrollwork/fx`, given to `auto()` or
+`start()` as `plugins: [fx]`. Without it, the list is carried and nothing
+happens. A list, in the order they stack (each works on the one before).
+
+Every effect takes:
+
+| Field | Default | |
+|---|---|---|
+| `type` | required | the effect |
+| `on` | per effect | `hover` (and keyboard focus), `appear` (its appear's progress, strongest at the start), `always`, `scroll` (the scroll speed) |
+| `intensity` | `0.6` | 0 to 1 |
+| `speed` | `1` | a multiple of its own pace, 0.1 to 4 |
+| `seed` | `0` | the random pattern's seed |
+| `in`, `out` | `0.12`, `0.35` | seconds to come in and go out, for `hover` |
+
+### glitch
+
+Blocks of the picture shift sideways in steps and the red and blue channels
+drift apart; stronger near the pointer. At rest the picture is itself.
+
+| Field | Default | |
+|---|---|---|
+| `on` | `"hover"` | |
+| `blocks` | `24` | blocks across the width, 2 to 128 |
+| `split` | `6` | px the colours move apart at full strength, 0 to 64 |
+
+The element's picture is its `background-image` (or its `::before`'s), fitted
+as `background-size: cover` or `contain` says. It is read with CORS
+(`crossorigin="anonymous"`): a picture served without `Access-Control-Allow-Origin`
+cannot be read, and the element keeps it as it is. The same when there is no
+WebGL2, no `OffscreenCanvas` (Safari before 16.4), or the reader asked for
+reduced motion.
+
 ## start(spec, options)
 
 A spec is `{ "version": 1, "items": [...], "smooth": false }`. Each item has an
@@ -203,5 +238,6 @@ says so.
 | `warn` | `true` | say in the console what could not be read |
 | `navigate`, `back`, `overlay`, `swap`, `close` | none | what the screen actions do |
 | `custom` | none | what the page's own actions do: `(name, data, interaction, phase)` |
+| `plugins` | none | plugins that play alongside the engine: `[fx]` from `scrollwork/fx` |
 
 `auto(root, options)` takes the same options (all optional), plus `smooth`.
