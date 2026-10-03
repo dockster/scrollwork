@@ -860,6 +860,35 @@ for (const name of BROWSERS) {
     await ctx.close();
   }
 
+  // ── a field on a box that scrolls sideways (a carousel) stays on the box (1.9.2) ──
+  {
+    const fxScript = '<script src="/scrollwork.min.js"></script><script src="/scrollwork-fx.min.js"></script>';
+    const body = `<div id="s" style="display:flex;width:400px;height:200px;overflow-x:auto;overflow-y:hidden;background:#fff" data-scrollwork='{"fx":[{"type":"dither","intensity":1}]}'><div style="flex:0 0 1200px;height:200px"></div></div>`;
+    const { p, ctx, errors } = await page(browser, body, { script: fxScript });
+    const able = await p.evaluate(() => {
+      const can = typeof OffscreenCanvas !== 'undefined' && !!new OffscreenCanvas(1, 1).getContext('webgl2') && !!document.createElement('canvas').getContext('bitmaprenderer');
+      window.sw = window.Scrollwork.auto(document.body, { plugins: [window.ScrollworkFx.fx] });
+      return can;
+    });
+    if (able) {
+      await sleep(300);
+      const at = () =>
+        p.evaluate(() => {
+          const host = document.getElementById('s');
+          const v = host.querySelector(':scope > canvas.ux-motion-fx');
+          const a = host.getBoundingClientRect(), b = v.getBoundingClientRect();
+          return { dx: Math.round(b.left - a.left), w: Math.round(b.width), scroll: host.scrollLeft };
+        });
+      const before = await at();
+      await p.evaluate(() => { document.getElementById('s').scrollLeft = 300; });
+      await sleep(150);
+      const after = await at();
+      check(tag('dither: on a box that scrolls sideways, the field stays on the box'), before.dx === 0 && after.scroll === 300 && after.dx === 0 && after.w === 400, JSON.stringify({ before, after }));
+    }
+    check(tag('no errors (dither in a scroller)'), errors.length === 0, errors.join(' | '));
+    await ctx.close();
+  }
+
   await browser.close();
 }
 

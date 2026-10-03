@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.9.2 (2026-10-02)
+
+- `dither` on an element that scrolls (a carousel, `overflow-x: auto`) stays
+  on the element as it shows: before, the field was drawn in the scrolled
+  content and slid away with it, uncovering the element's edge as the cards
+  moved. The pointer trail already followed the element's visible box.
+
 ## 1.9.1 (2026-10-02)
 
 - `dither` draws behind the element's children and over its own fill, as a

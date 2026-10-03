@@ -486,6 +486,16 @@ export function createSurface(o: SurfaceOptions): Surface | null {
         h.hoverTo = 0;
         wake();
       };
+      // A field fills the box as it shows: a host that scrolls (a carousel)
+      // would carry an absolute view off with its content, so the view follows
+      // the scroll and stays where the box is (the Aspen team cards, 1.9.2)
+      if (field) {
+        const hold = () => {
+          view.style.translate = el.scrollLeft || el.scrollTop ? `${el.scrollLeft}px ${el.scrollTop}px` : '';
+        };
+        on('scroll', hold);
+        hold();
+      }
       on('pointerenter', enter);
       on('pointerleave', leave);
       // keyboard focus gets the same effect as the pointer
