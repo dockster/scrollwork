@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.9.3 (2026-10-04)
+
+- Split text (`lines`, `words`, `chars`) breaks a word wider than its line
+  where the element's own CSS lets it (`word-break: break-word`,
+  `overflow-wrap: break-word` or `anywhere`), as the text does unsplit:
+  before, each word was kept on one line and ran past the element's edge, so
+  a big headline on a phone overflowed and everything under it moved up.
+  Without those properties a word still never breaks.
+
 ## 1.9.2 (2026-10-02)
 
 - `dither` on an element that scrolls (a carousel, `overflow-x: auto`) stays

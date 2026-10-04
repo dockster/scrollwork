@@ -116,6 +116,12 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
     const texts: Text[] = [];
     while (walker.nextNode()) texts.push(walker.currentNode as Text);
     const units: Unit[] = [];
+    // A word wider than the line breaks inside itself where the element's own
+    // CSS says it may (word-break: break-word, overflow-wrap), as it would
+    // unsplit: each piece is kept to the line's width. Elsewhere a word never
+    // breaks, as before.
+    const cs = doc.defaultView ? doc.defaultView.getComputedStyle(el) : null;
+    const breaks = !!cs && (cs.wordBreak === 'break-word' || cs.wordBreak === 'break-all' || cs.overflowWrap === 'anywhere' || cs.overflowWrap === 'break-word');
     const inline = (cls: string) => {
       const s = doc.createElement('span');
       s.className = cls;
@@ -132,7 +138,8 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
           continue;
         }
         const word = inline('ux-motion-word');
-        word.style.whiteSpace = 'nowrap';
+        if (breaks) word.style.maxWidth = '100%';
+        else word.style.whiteSpace = 'nowrap';
         if (!focusable) word.setAttribute('aria-hidden', 'true');
         let holder: HTMLElement = word;
         if (mask) {
@@ -143,6 +150,7 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
           word.style.paddingBottom = '0.12em';
           word.style.marginBottom = '-0.12em';
           holder = inline('ux-motion-inner');
+          if (breaks) holder.style.maxWidth = '100%';
           word.appendChild(holder);
         }
         if (by === 'chars') {

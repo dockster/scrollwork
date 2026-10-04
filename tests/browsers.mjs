@@ -193,6 +193,32 @@ for (const name of BROWSERS) {
     await ctx.close();
   }
 
+  // ── a word wider than its line breaks where the element's CSS lets it (1.9.3) ──
+  {
+    const box = 'width:200px;font:60px/1 sans-serif;margin:0';
+    const { p, ctx, errors } = await page(
+      browser,
+      `<h2 id="plain" style="${box};word-break:break-word">PLACINGPLACING</h2>
+       <h2 id="lines" style="${box};word-break:break-word" data-scrollwork='{"appear":{"effect":"mask","split":"lines","duration":0.2}}'>PLACINGPLACING</h2>
+       <h2 id="chars" style="${box};overflow-wrap:anywhere" data-scrollwork='{"appear":{"effect":"fade","split":"chars","duration":0.2}}'>PLACINGPLACING</h2>
+       <h2 id="keep" style="${box}" data-scrollwork='{"appear":{"effect":"mask","split":"lines","duration":0.2}}'>PLACINGPLACING</h2>
+       <h2 id="fits" style="${box};word-break:break-word" data-scrollwork='{"appear":{"effect":"mask","split":"lines","duration":0.2}}'>A B</h2>`
+    );
+    const plain = await p.evaluate(() => document.getElementById('plain').offsetHeight);
+    await p.evaluate(() => (window.sw = window.Scrollwork.auto()));
+    await sleep(500);
+    const m = await p.evaluate(() => Object.fromEntries(['lines', 'chars', 'keep', 'fits'].map((id) => {
+      const el = document.getElementById(id);
+      return [id, { h: el.offsetHeight, w: el.scrollWidth }];
+    })));
+    check(tag('a word too wide for the line breaks as it does unsplit (lines, mask)'), m.lines.h === plain && m.lines.w <= 200, `${JSON.stringify(m.lines)} vs ${plain}`);
+    check(tag('and split into letters'), m.chars.h === plain && m.chars.w <= 200, `${JSON.stringify(m.chars)} vs ${plain}`);
+    check(tag('without break-word the word stays whole, as before'), m.keep.h === 60 && m.keep.w > 200, JSON.stringify(m.keep));
+    check(tag('words that fit are not broken'), m.fits.h === 60, JSON.stringify(m.fits));
+    check(tag('no errors (word break)'), errors.length === 0, errors.join(' | '));
+    await ctx.close();
+  }
+
   // ── a scroller that is not positioned ──
   {
     const { p, ctx, errors } = await page(
