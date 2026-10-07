@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.10.0 (2026-10-07)
+
+- An appear on a layer near the bottom of the page plays once the page is
+  scrolled to its end: every appear whose trigger is on screen there plays,
+  though its top never reached the `offset` line. Before, a footer or a last
+  card in the bottom 15% of the screen waited, hidden, for a scroll that could
+  not come. `seek(y, height, now?, bottom?)` takes the furthest scroll (the
+  root's height less the screen when unset) for the same rule in seek mode.
+
 ## 1.9.3 (2026-10-04)
 
 - Split text (`lines`, `words`, `chars`) breaks a word wider than its line

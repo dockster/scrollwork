@@ -646,6 +646,42 @@ for (const name of BROWSERS) {
     check(tag('no errors (timed seek)'), errors.length === 0, errors.join(' | '));
     await ctx.close();
   }
+  // ── the end of the page: an appear in the screen's bottom 15% still plays (1.10.0) ──
+  {
+    const html = `<style>body{margin:0}</style><div style="height:2000px"></div><div id="f" data-m="f" style="height:60px">footer</div>`;
+    const item = { id: 'f', text: false, appear: { effect: 'fade', duration: 0.2, delay: 0, stagger: 0, ease: 'linear', offset: 15, replay: false } };
+    const { p, ctx, errors } = await page(browser, html);
+    const r = await p.evaluate(async (item) => {
+      const sw = window.Scrollwork.start({ items: [item], smooth: false }, { attr: 'data-m', root: document.body, scroller: null, reduced: false, split: false });
+      const op = () => getComputedStyle(document.getElementById('f')).opacity;
+      const wait = (ms) => new Promise((res) => setTimeout(res, ms));
+      await wait(100);
+      const before = op();
+      // scrolled to the very end: the footer's top is on screen but below the 15% line
+      window.scrollTo(0, document.documentElement.scrollHeight);
+      await wait(600);
+      const top = document.getElementById('f').getBoundingClientRect().top;
+      const out = { before, after: op(), top, line: innerHeight * 0.85 };
+      sw.stop();
+      return out;
+    }, item);
+    check(tag('live: an appear below the offset line at the end of the page plays'), r.before === '0' && r.top > r.line && r.after === '1', JSON.stringify(r));
+    // seek mode: the same at the bottom it is told, and not a pixel before
+    const s = await p.evaluate((item) => {
+      window.scrollTo(0, 0);
+      const sw = window.Scrollwork.start({ items: [item], smooth: false }, { attr: 'data-m', root: document.body, scroller: null, reduced: false, split: false, seekOnly: true });
+      const op = () => getComputedStyle(document.getElementById('f')).opacity;
+      sw.seek(1200, 800, undefined, 1260); const short = op();
+      sw.seek(1260, 800, undefined, 1260); const end = op();
+      sw.seek(1260, 800); const derived = op();
+      sw.stop();
+      return { short, end, derived };
+    }, item);
+    check(tag('seek: plays at the bottom it is given, waits short of it'), s.short === '0' && s.end === '1', JSON.stringify(s));
+    check(tag('seek: the bottom defaults to the root height less the screen'), s.derived === '1', JSON.stringify(s));
+    check(tag('no errors (end of page)'), errors.length === 0, errors.join(' | '));
+    await ctx.close();
+  }
   {
     const { p, ctx, errors } = await page(browser, `<div id="a">a</div>`);
     const back = await p.evaluate(async () => {

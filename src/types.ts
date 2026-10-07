@@ -313,9 +313,11 @@ export interface MotionControl {
    * Without a clock an appear is shown finished once its trigger has arrived.
    * With one (`performance.now()`), an appear that arrives plays in time from
    * that moment, and leaving its start resets it; seek again each frame while
-   * this returns true, which says something is still in flight.
+   * this returns true, which says something is still in flight. `bottom` is
+   * the furthest the page scrolls (the root's height less the screen when
+   * unset): there, every appear whose trigger is on screen plays.
    */
-  seek(y: number, height: number, now?: number): boolean;
+  seek(y: number, height: number, now?: number, bottom?: number): boolean;
   /** back to the top, every appear ready to play again */
   replay(): void;
 }

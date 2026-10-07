@@ -652,7 +652,13 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
    * anything is still in flight, so the loop can rest (PRODUCT-CANVAS §13.27
    * item 24): a preview sitting still used to do this work sixty times a second.
    */
-  const render = (y: number, vh: number, now: number | null, dt = 0): boolean => {
+  /**
+   * `bottom` is the furthest the page scrolls: there, every appear whose
+   * trigger is on screen plays, though its top never reached the offset line.
+   * A footer or the last card of a page sits in the bottom 15% of the screen
+   * at most; without this it waited, hidden, for a scroll that could not come.
+   */
+  const render = (y: number, vh: number, now: number | null, dt = 0, bottom = Infinity): boolean => {
     let moving = false;
     // pins first: everything inside or triggered by a pinned layer reads its offset
     for (const e of entries) {
@@ -708,7 +714,7 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
       if (a) {
         const trig = triggerOf(e, a.trigger);
         const screenTop = topOf(trig) - y;
-        const arrived = screenTop < vh * (1 - a.offset / 100);
+        const arrived = screenTop < vh * (1 - a.offset / 100) || (y >= bottom - 1 && screenTop < vh);
         if (arrived) {
           if (!e.played) {
             e.played = true;
@@ -896,7 +902,7 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
     }
     // nothing in flight, nothing scrolled, nothing touched: skip the pass
     if (dirty || moving || tween || gliding || y !== lastY || vh !== lastVh) {
-      moving = render(y, vh, now, dt);
+      moving = render(y, vh, now, dt, maxY());
       dirty = false;
       lastY = y;
       lastVh = vh;
@@ -1308,9 +1314,9 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
       stickies.clear();
       for (const r of restores.splice(0).reverse()) r();
     },
-    seek(y: number, height: number, now?: number) {
+    seek(y: number, height: number, now?: number, bottom?: number) {
       measure();
-      return render(y, height, now ?? null);
+      return render(y, height, now ?? null, 0, bottom ?? root.offsetHeight - height);
     },
     replay() {
       touch();

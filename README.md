@@ -105,7 +105,7 @@ defaults, is in [docs/REFERENCE.md](docs/REFERENCE.md).
 
 | Key | What it does |
 |---|---|
-| `appear` | Plays once the element comes into view: `fade`, `slide-up`, `mask`, `blur`, `scale` or a `custom` start state. Text can be split into `lines`, `words` or letters (`chars`), with a stagger. |
+| `appear` | Plays once the element comes into view (its top `offset`% up the screen, or on screen at all once the page is scrolled to its end): `fade`, `slide-up`, `mask`, `blur`, `scale` or a `custom` start state. Text can be split into `lines`, `words` or letters (`chars`), with a stagger. |
 | `scroll` | Follows the scroll position: parallax (`speed`, with `cover` to keep a picture over its clipped box), or `from` and `to` states scrubbed across the element's passage. |
 | `pin` | Holds the element in place for a stretch of scrolling. |
 | `hover`, `press` | A state to move to while hovered (or focused by keyboard) or pressed. |
@@ -133,9 +133,10 @@ quiet it.
 | `spring(stiffness, damping, mass)` | `{ ease, duration }` | A spring as a curve, and how long it takes to settle; `SPRINGS` has Figma's four |
 
 A **control** (`auto`, `start`) has `stop()`, which gives every element back
-exactly as it was, `replay()`, and in seek mode `seek(y, height, now?)`: the
-page posed at a scroll position; with a clock, an appear that arrives plays
-in time, and the call says whether anything is still in flight.
+exactly as it was, `replay()`, and in seek mode `seek(y, height, now?, bottom?)`:
+the page posed at a scroll position; with a clock, an appear that arrives plays
+in time, and the call says whether anything is still in flight. `bottom` is the
+furthest the page scrolls (the root's height less the screen when unset).
 
 **Controls** (`animate`) have `play()`, `pause()`, `reverse()`, `seek(0..1)`,
 `finish()`, `cancel()`, `finished` (a promise), `progress` and `playing`.
