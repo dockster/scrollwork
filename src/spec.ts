@@ -6,12 +6,12 @@
 import { SPEC_VERSION } from './types.js';
 import { EASINGS } from './easing.js';
 import { resolveVars } from './vars.js';
-import type { AppearMotion, FxSpec, LoopMotion, Interaction, InteractionAnimation, MotionEase, MotionItem, MotionKey, MotionSpec, MotionState, PinMotion, ScrollMotion } from './types.js';
+import type { AppearMotion, FxSpec, LoopMotion, Interaction, InteractionAnimation, MotionEase, MotionItem, MotionKey, MotionSpec, MotionState, PinMotion, ScrollMotion, CursorMotion, LoaderMotion } from './types.js';
 
 export const EASES: readonly MotionEase[] = ['smooth', 'out', 'in-out', 'expo', 'back', 'linear', 'in', 'in-back', 'in-out-back', ...EASINGS];
 const EFFECTS = ['fade', 'slide-up', 'mask', 'blur', 'scale', 'custom', 'roll'] as const;
 const SPLITS = ['none', 'lines', 'words', 'chars'] as const;
-const RANGES = ['through', 'in', 'out'] as const;
+const RANGES = ['through', 'in', 'out', 'hold'] as const;
 const TRIGGERS = ['none', 'click', 'drag', 'hover', 'press', 'key', 'mouseenter', 'mouseleave', 'mousedown', 'mouseup', 'delay', 'media-end', 'media-time'] as const;
 const ACTIONS = ['none', 'navigate', 'change', 'back', 'scroll', 'url', 'overlay', 'swap', 'close', 'custom'] as const;
 
@@ -67,6 +67,9 @@ export const state = (v: unknown, notes: Notes, what: string, base: Partial<Moti
     blur: num(s.blur, b.blur, notes, what + '.blur', 0),
   };
   // one axis, a colour or a picture: only when given, so a state reads back as it was written
+  if (s.rotateX !== undefined) out.rotateX = num(s.rotateX, 0, notes, what + '.rotateX');
+  if (s.rotateY !== undefined) out.rotateY = num(s.rotateY, 0, notes, what + '.rotateY');
+  if (s.perspective !== undefined) out.perspective = num(s.perspective, 1000, notes, what + '.perspective', 1);
   if (s.scaleX !== undefined || b.scaleX !== 1) out.scaleX = num(s.scaleX, b.scaleX, notes, what + '.scaleX', 0);
   if (s.scaleY !== undefined || b.scaleY !== 1) out.scaleY = num(s.scaleY, b.scaleY, notes, what + '.scaleY', 0);
   const fill = colour(s.fill ?? b.fill, notes, what + '.fill');
@@ -130,7 +133,7 @@ export function readAppear(v: unknown, notes: Notes, what: string): AppearMotion
   };
 }
 
-export const LOOP_DEFAULTS = { duration: 4, ease: 'linear', yoyo: false, delay: 0 } as const;
+export const LOOP_DEFAULTS = { duration: 4, ease: 'linear', yoyo: false, delay: 0, fade: 0, upright: false, flipbook: 0 } as const;
 
 export function readLoop(v: unknown, notes: Notes, what: string): LoopMotion | undefined {
   if (v === undefined || v === false) return undefined;
@@ -145,6 +148,9 @@ export function readLoop(v: unknown, notes: Notes, what: string): LoopMotion | u
     ease: oneOf(v.ease, EASES, LOOP_DEFAULTS.ease, notes, what + '.ease'),
     yoyo: v.yoyo === undefined ? LOOP_DEFAULTS.yoyo : !!v.yoyo,
     delay: num(v.delay, LOOP_DEFAULTS.delay, notes, what + '.delay', 0),
+    fade: num(v.fade, LOOP_DEFAULTS.fade, notes, what + '.fade', 0),
+    upright: v.upright === true,
+    flipbook: num(v.flipbook, LOOP_DEFAULTS.flipbook, notes, what + '.flipbook', 0, 60),
     keys: keys(v.keys, notes, what + '.keys'),
   };
 }
@@ -167,6 +173,35 @@ export function readPin(v: unknown, notes: Notes, what: string): PinMotion | und
   if (v === undefined || v === false) return undefined;
   const p = isObj(v) ? v : {};
   return { distance: num(p.distance, 600, notes, what + '.distance', 0), top: num(p.top, 0, notes, what + '.top') };
+}
+
+export const LOADER_DEFAULTS = { hold: 2.5, leave: 0.6, effect: 'fade', once: false } as const;
+
+export function readLoader(v: unknown, notes: Notes, what: string): LoaderMotion | undefined {
+  if (v === undefined || v === false) return undefined;
+  const l = isObj(v) ? v : {};
+  if ((v as unknown) !== true && !isObj(v)) notes.add(`${what}: expected true or an object like {"hold": 2.5, "leave": 0.6}`);
+  return {
+    hold: num(l.hold, LOADER_DEFAULTS.hold, notes, what + '.hold', 0, 60),
+    leave: num(l.leave, LOADER_DEFAULTS.leave, notes, what + '.leave', 0, 10),
+    effect: oneOf(l.effect, ['fade', 'blur'] as const, LOADER_DEFAULTS.effect, notes, what + '.effect'),
+    once: l.once === true,
+  };
+}
+
+export const CURSOR_DEFAULTS = { lag: 0.12, hide: true, blend: 'normal' } as const;
+
+export function readCursor(v: unknown, notes: Notes, what: string): CursorMotion | undefined {
+  if (v === undefined || v === false) return undefined;
+  const c = isObj(v) ? v : {};
+  if ((v as unknown) !== true && !isObj(v)) notes.add(`${what}: expected true or an object like {"lag": 0.12, "links": {"scale": 2.5}}`);
+  const out: CursorMotion = {
+    lag: num(c.lag, CURSOR_DEFAULTS.lag, notes, what + '.lag', 0, 2),
+    hide: c.hide === undefined ? CURSOR_DEFAULTS.hide : !!c.hide,
+    blend: oneOf(c.blend, ['normal', 'difference'] as const, CURSOR_DEFAULTS.blend, notes, what + '.blend'),
+  };
+  if (c.links !== undefined) out.links = state(c.links, notes, what + '.links');
+  return out;
 }
 
 export function readAnimation(v: unknown, notes: Notes, what: string, duration = 0.25): InteractionAnimation {
@@ -270,6 +305,10 @@ export function readItem(v: unknown, notes: Notes, i: number): MotionItem | null
   if (p) item.pin = p;
   const l = readLoop(v.loop, notes, `${what}.loop`);
   if (l) item.loop = l;
+  const c = readCursor(v.cursor, notes, `${what}.cursor`);
+  if (c) item.cursor = c;
+  const ld = readLoader(v.loader, notes, `${what}.loader`);
+  if (ld) item.loader = ld;
   if (v.interactions !== undefined) {
     if (!Array.isArray(v.interactions)) notes.add(`${what}.interactions: expected a list`);
     else {

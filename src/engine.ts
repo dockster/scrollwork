@@ -9,7 +9,7 @@
 // back exactly as it was.
 
 import { bezier, clamp01, EASES, spring } from './easing.js';
-import { combine, identity, mix, NONE, paint, parseColour, putInline, BLANK, readBase, release, type Base, type State } from './style.js';
+import { combine, degrees, identity, mix, NONE, paint, parseColour, putInline, BLANK, readBase, release, type Base, type State } from './style.js';
 import type { AppearMotion, Interaction, InteractionAnimation, MotionControl, MotionItem, MotionKey, MotionOptions, MotionSpec, MotionState, PluginHandle, Signals } from './types.js';
 
 export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionControl {
@@ -20,6 +20,16 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
     el: HTMLElement;
     units: Unit[];
     base: Base;
+    /** what a split unit is painted against: nothing of its own but the element's colour, so a word's ink comes back to it */
+    unit: Base;
+    /** degrees a parent's upright loop turns this element back by, this frame */
+    tilt: number;
+    /** an upright loop's children, with each one's own rotation and its inline value to put back */
+    kids: Array<{ el: HTMLElement; rot: number; inline: string }> | null;
+    /** a custom cursor: where the pointer is (tx, ty) and where the element has caught up to (x, y), in the root's px */
+    cur: { x: number; y: number; tx: number; ty: number; seen: boolean; k: number; over: boolean; w: number; h: number } | null;
+    /** a flipbook loop's children with their own visibility, and which one shows */
+    flip: { kids: HTMLElement[]; had: string[]; at: number } | null;
     /** split by lines: the words are regrouped when the width changes */
     lines: boolean;
     top: number;
@@ -59,6 +69,9 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
     s.sx = m.scaleX ?? 1;
     s.sy = m.scaleY ?? 1;
     s.rotate = m.rotate;
+    s.rx = m.rotateX || 0;
+    s.ry = m.rotateY || 0;
+    s.pz = m.perspective || 0;
     s.opacity = m.opacity;
     s.blur = m.blur;
     if (m.fill) s.fill = { c: colourOf(m.fill), k: 1 };
@@ -281,6 +294,11 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
       // a roll masks too: what is not a digit slides up into its word
       units: splitBy ? split(el, splitBy, a!.effect === 'mask' || a!.effect === 'roll', a!.effect === 'roll' ? (a!.turns ?? 1) : -1) : [],
       base,
+      unit: { ...NONE, ink: base.ink },
+      tilt: 0,
+      kids: null,
+      cur: null,
+      flip: null,
       lines: splitBy === 'lines',
       top: 0,
       height: 0,
@@ -295,7 +313,200 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
     };
     entries.push(entry);
     byEl.set(el, entry);
+    // an upright loop: the children are read once, with the rotation their own CSS gives them
+    if (item.loop && item.loop.upright) {
+      entry.kids = [];
+      for (const c of Array.from(el.children)) {
+        if (!(c instanceof win.HTMLElement)) continue;
+        const cr = win.getComputedStyle(c).rotate;
+        entry.kids.push({ el: c, rot: cr && cr !== 'none' ? degrees(cr) : 0, inline: c.style.rotate });
+      }
+      const kids = entry.kids;
+      restores.push(() => {
+        for (const k of kids) k.el.style.rotate = k.inline;
+      });
+    }
+    // a flipbook loop: the children, shown one at a time from the first frame on
+    if (item.loop && item.loop.flipbook > 0) {
+      const kids = Array.from(el.children).filter((c): c is HTMLElement => c instanceof win.HTMLElement);
+      const had = kids.map((k) => k.style.visibility);
+      entry.flip = { kids, had, at: -1 };
+      restores.push(() => kids.forEach((k, i) => (k.style.visibility = had[i])));
+    }
+    // a loop's fade: the parent (the box that clips the marquee) fades at both
+    // ends of the axis the loop moves along; its own mask comes back on stop
+    const lp = item.loop;
+    const box = el.parentElement;
+    if (lp && lp.fade > 0 && box) {
+      const dx = Math.abs(lp.to.x - lp.from.x);
+      const dy = Math.abs(lp.to.y - lp.from.y);
+      const px = lp.fade + 'px';
+      const mask = 'linear-gradient(to ' + (dx >= dy ? 'right' : 'bottom') + ', transparent, #000 ' + px + ', #000 calc(100% - ' + px + '), transparent)';
+      const bs = box.style as CSSStyleDeclaration & { webkitMaskImage?: string };
+      const had = { mask: bs.maskImage, webkit: bs.webkitMaskImage };
+      bs.maskImage = mask;
+      bs.webkitMaskImage = mask;
+      restores.push(() => {
+        bs.maskImage = had.mask;
+        bs.webkitMaskImage = had.webkit;
+      });
+    }
   }
+  // ── a loader: covers the page as it opens, holds, leaves; every appear outside it waits ──
+  // t0 is -1 until the first frame with a clock; `inside` are the elements it holds, whose appears play meanwhile
+  let loader: { e: Entry; inside: Set<HTMLElement>; t0: number; t1: number; phase: 'hold' | 'leave' | 'done'; key: string } | null = null;
+  const loaderEntry = opts.seekOnly ? undefined : entries.find((e) => e.item.loader);
+  if (loaderEntry) {
+    const el = loaderEntry.el;
+    const ld = loaderEntry.item.loader!;
+    const key = 'sw-loader:' + loaderEntry.item.id;
+    let seenBefore = false;
+    try {
+      seenBefore = ld.once && !!win.sessionStorage && win.sessionStorage.getItem(key) === '1';
+    } catch {
+      /* storage closed to the page: the loader plays */
+    }
+    const st = el.style;
+    const had = { position: st.position, inset: st.inset, width: st.width, height: st.height, margin: st.margin, zIndex: st.zIndex, display: st.display };
+    restores.push(() => {
+      st.position = had.position;
+      st.inset = had.inset;
+      st.width = had.width;
+      st.height = had.height;
+      st.margin = had.margin;
+      st.zIndex = had.zIndex;
+      st.display = had.display;
+    });
+    const inside = new Set<HTMLElement>();
+    for (const e of entries) if (e !== loaderEntry && el.contains(e.el)) inside.add(e.el);
+    loader = { e: loaderEntry, inside, t0: -1, t1: 0, phase: seenBefore || reduced ? 'done' : 'hold', key };
+    // over the page: fixed over the window, or over the root when the root is a box of its own (a preview)
+    const page = el.ownerDocument.body;
+    const onPage = root === page || root === page.parentElement;
+    if (onPage) {
+      st.position = 'fixed';
+      st.inset = '0';
+    } else {
+      st.position = 'absolute';
+      st.inset = 'auto';
+      st.width = '100%';
+    }
+    st.margin = '0';
+    st.zIndex = '2147482000';
+    if (loader.phase === 'done') st.display = 'none';
+  }
+  /** the page cannot scroll while the loader holds: the scroller's overflow, put back when it leaves */
+  const lockEl = scroller || root.ownerDocument.documentElement;
+  const hadOverflow = lockEl.style.overflow;
+  const lockScroll = (on: boolean) => {
+    if (!loader) return;
+    lockEl.style.overflow = on ? 'hidden' : hadOverflow;
+    if (on) scrollTo(0);
+  };
+  if (loader && loader.phase !== 'done') restores.push(() => (lockEl.style.overflow = hadOverflow));
+  /** the loader has gone: the page scrolls, the rest of the appears may play, a once-loader is remembered */
+  const loaderDone = () => {
+    if (!loader) return;
+    loader.phase = 'done';
+    loader.e.el.style.display = 'none';
+    lockScroll(false);
+    if (loader.e.item.loader!.once) {
+      try {
+        win.sessionStorage.setItem(loader.key, '1');
+      } catch {
+        /* storage closed to the page */
+      }
+    }
+  };
+  /** an appear may play: there is no loader holding, or it is inside the loader */
+  const mayAppear = (e: Entry) => !loader || loader.phase === 'done' || loader.inside.has(e.el);
+
+  // ── a custom cursor: taken out of the flow, it follows the pointer in the root's own px ──
+  // (absolute in the root rather than fixed, so a zoomed or scaled root, as a preview's, still lines up)
+  const cursors: Entry[] = [];
+  if (!opts.seekOnly) {
+    for (const e of entries) {
+      const c = e.item.cursor;
+      if (!c) continue;
+      const st = e.el.style;
+      const had = { position: st.position, left: st.left, top: st.top, margin: st.margin, pointerEvents: st.pointerEvents, zIndex: st.zIndex, mixBlendMode: st.mixBlendMode };
+      e.cur = { x: 0, y: 0, tx: 0, ty: 0, seen: false, k: 0, over: false, w: e.el.offsetWidth, h: e.el.offsetHeight };
+      st.position = 'absolute';
+      st.left = '0';
+      st.top = '0';
+      st.margin = '0';
+      st.pointerEvents = 'none';
+      st.zIndex = '2147483000';
+      if (c.blend !== 'normal') st.mixBlendMode = c.blend;
+      restores.push(() => {
+        st.position = had.position;
+        st.left = had.left;
+        st.top = had.top;
+        st.margin = had.margin;
+        st.pointerEvents = had.pointerEvents;
+        st.zIndex = had.zIndex;
+        st.mixBlendMode = had.mixBlendMode;
+      });
+      cursors.push(e);
+    }
+  }
+  // a device that cannot hover has no pointer to follow: the element stays hidden
+  const noHover = cursors.length > 0 && typeof win.matchMedia === 'function' && win.matchMedia('(hover: none)').matches;
+  // the listeners, once `on` exists below
+  const listenCursor = () => {
+    if (!cursors.length || noHover) return;
+    // the page's own cursor is hidden over the root and everything in it (a link's
+    // pointer too), by a rule rather than inheritance; only over the root, so a
+    // preview inside an app hides it over the screen alone
+    const hides = cursors.some((e) => e.item.cursor!.hide);
+    const doc = root.ownerDocument;
+    const HID = 'data-sw-cursor-hidden';
+    if (hides) {
+      const rule = doc.createElement('style');
+      rule.textContent = '[' + HID + '],[' + HID + '] *{cursor:none!important}';
+      doc.head.appendChild(rule);
+      root.setAttribute(HID, '');
+      restores.push(() => {
+        rule.remove();
+        root.removeAttribute(HID);
+      });
+    }
+    on(win, 'pointermove', (ev) => {
+      const p = ev as PointerEvent;
+      if (p.pointerType === 'touch') return;
+      const r = root.getBoundingClientRect();
+      const z = root.offsetWidth ? r.width / root.offsetWidth : 1;
+      const t = p.target as Element | null;
+      const at = (sel: string) => !!t && typeof t.closest === 'function' && !!t.closest(sel);
+      // the page's cursor comes back over a field being typed in
+      if (hides) {
+        // a field being typed in; contenteditable="false" is not one
+        if (at('input, textarea, select, [contenteditable]:not([contenteditable="false"])')) root.removeAttribute(HID);
+        else if (!root.hasAttribute(HID)) root.setAttribute(HID, '');
+      }
+      const over = at('a[href], button, summary, label, input, select, textarea, [role="button"], [role="link"], [role="tab"], [role="menuitem"], [role="option"], [role="checkbox"], [role="switch"], [role="radio"]');
+      for (const e of cursors) {
+        const c = e.cur!;
+        c.w = e.el.offsetWidth;
+        c.h = e.el.offsetHeight;
+        c.tx = (p.clientX - r.left) / z - c.w / 2;
+        c.ty = (p.clientY - r.top) / z - c.h / 2;
+        if (!c.seen) {
+          c.seen = true;
+          c.x = c.tx;
+          c.y = c.ty;
+        }
+        c.over = over;
+      }
+      touch();
+    });
+    // the pointer leaving the window: the cursor goes with it
+    on(root.ownerDocument, 'pointerout', (ev) => {
+      if ((ev as PointerEvent).relatedTarget) return;
+      for (const e of cursors) e.cur!.seen = false;
+      touch();
+    });
+  };
   const triggerOf = (e: Entry, id: string | undefined) => find(id) || e.el;
   /**
    * Triggers that are not motion layers themselves, measured with everyone
@@ -698,6 +909,10 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
         if (te && te.item.pin && trig !== e.el) {
           start = te.top + carried(trig) - te.item.pin.top;
           end = start + Math.max(1, te.item.pin.distance);
+        } else if (sc.range === 'hold' && it.pin) {
+          // its own hold: from where it is caught to where it is let go
+          start = e.top + carried(e.el) - it.pin.top;
+          end = start + Math.max(1, it.pin.distance);
         } else {
           const T = topOf(trig) - (trig === e.el ? e.pinOffset : 0);
           const H = heightOf(trig);
@@ -714,7 +929,7 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
       if (a) {
         const trig = triggerOf(e, a.trigger);
         const screenTop = topOf(trig) - y;
-        const arrived = screenTop < vh * (1 - a.offset / 100) || (y >= bottom - 1 && screenTop < vh);
+        const arrived = mayAppear(e) && (screenTop < vh * (1 - a.offset / 100) || (y >= bottom - 1 && screenTop < vh));
         if (arrived) {
           if (!e.played) {
             e.played = true;
@@ -743,8 +958,8 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
               // the column rolls up a row at a time: row i shows at -i/rows of its height
               const r = identity();
               r.yp = (-ease(k) * (u.rows - 1) * 100) / u.rows;
-              paint(u.el, r, NONE);
-            } else paint(u.el, timeline(from, a.keys, identity(), k, ease), NONE);
+              paint(u.el, r, e.unit);
+            } else paint(u.el, timeline(from, a.keys, identity(), k, ease), e.unit);
           }
         } else {
           const k = progress(0);
@@ -766,6 +981,15 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
           if (k > 1) k = 2 - k;
           own = combine(own, timeline(asState(lp.from), lp.keys, asState(lp.to), k, EASES[lp.ease] || EASES.linear));
         }
+        // a flipbook: one child at a time, the first before the delay is up
+        const fb = e.flip;
+        if (fb && fb.kids.length) {
+          const at = Math.floor(Math.max(0, t) / lp.flipbook) % fb.kids.length;
+          if (at !== fb.at) {
+            fb.at = at;
+            fb.kids.forEach((k, i) => (k.style.visibility = i === at ? fb.had[i] : 'hidden'));
+          }
+        }
         if (seen) moving = true;
       }
       if (now !== null) {
@@ -776,8 +1000,68 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
           if (c.p > 0 && c.ix.action.type === 'change') own = combine(own, mix(identity(), asState(c.ix.action.state), curveOf(anim)(c.p)));
         }
       }
+      // the loader: holds, then leaves (fading, blurring), then is gone
+      if (loader && loader.e === e && loader.phase !== 'done' && now !== null) {
+        const ld = it.loader!;
+        if (loader.t0 < 0) {
+          loader.t0 = now;
+          lockScroll(true);
+        }
+        if (loader.phase === 'hold' && now - loader.t0 >= ld.hold * 1000) {
+          loader.phase = 'leave';
+          loader.t1 = now;
+        }
+        if (loader.phase === 'leave') {
+          const k = ld.leave > 0 ? clamp01((now - loader.t1) / (ld.leave * 1000)) : 1;
+          own.opacity *= 1 - k;
+          if (ld.effect === 'blur') own.blur += 20 * k;
+          if (k >= 1) loaderDone();
+        }
+        // a loader over a box of its own is as tall as what shows of it
+        if ((loader.phase as string) !== 'done' && e.el.style.position === 'absolute') e.el.style.height = vh + 'px';
+        moving = true;
+      }
+      // a custom cursor catches up with the pointer, and grows (or whatever its `links` state is) over a link
+      const cu = e.cur;
+      if (cu) {
+        const lag = reduced ? 0 : it.cursor!.lag;
+        // the first frame after a rest has no dt: it waits a frame rather than jump to the pointer
+        const a = lag > 0 ? (dt > 0 && now !== null ? 1 - Math.exp(-dt / (lag * 1000)) : 0) : 1;
+        cu.x += (cu.tx - cu.x) * a;
+        cu.y += (cu.ty - cu.y) * a;
+        if (Math.abs(cu.tx - cu.x) > 0.3 || Math.abs(cu.ty - cu.y) > 0.3) moving = true;
+        else {
+          cu.x = cu.tx;
+          cu.y = cu.ty;
+        }
+        own.x += cu.x;
+        own.y += cu.y;
+        if (!cu.seen) own.opacity = 0;
+        const links = it.cursor!.links;
+        if (links) {
+          const to = cu.over ? 1 : 0;
+          cu.k = approach(cu.k, to, 0.25, dt);
+          if (cu.k !== to) moving = true;
+          if (cu.k > 0) own = combine(own, mix(identity(), asState(links), EASES.out(cu.k)));
+        }
+      }
+      // a parent's upright loop turns this element back by what it turned
+      if (e.tilt) {
+        const back = identity();
+        back.rotate = e.tilt;
+        own = combine(own, back);
+      }
       e.sig.image = own.image;
       paint(e.el, own, e.base);
+      // and this element's upright loop keeps its children level: a child the
+      // engine moves is told (and painted when its turn comes), the rest are turned here
+      if (e.kids) {
+        for (const k of e.kids) {
+          const ce = byEl.get(k.el);
+          if (ce) ce.tilt = -own.rotate;
+          else k.el.style.rotate = own.rotate ? k.rot - own.rotate + 'deg' : k.inline;
+        }
+      }
     }
     // plugins draw last, over what was painted; one still in flight keeps the loop awake
     if (handles.length) {
@@ -841,6 +1125,11 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
   };
   const onWheel = (ev: WheelEvent) => {
     if (ev.ctrlKey || reduced) return;
+    // the page holds still while the loader holds
+    if (loader && loader.phase !== 'done') {
+      ev.preventDefault();
+      return;
+    }
     const sideways = Math.abs(ev.deltaX) > Math.abs(ev.deltaY);
     if (inner(ev.target, sideways ? ev.deltaX : 0, sideways ? 0 : ev.deltaY)) return;
     // A sideways swipe is the browser's (a sideways scroll, or back). A
@@ -925,6 +1214,7 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
     el.addEventListener(type, fn, capture);
     unlisten.push(() => el.removeEventListener(type, fn, capture));
   };
+  listenCursor();
   const timers = new Set<number>();
   const later = (seconds: number, fn: () => void) => {
     // reduced motion takes away movement, not time: a "after 2 s" still waits
@@ -1321,6 +1611,11 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
     replay() {
       touch();
       for (const e of entries) e.played = false;
+      if (loader && !reduced) {
+        loader.phase = 'hold';
+        loader.t0 = -1;
+        loader.e.el.style.display = '';
+      }
       target = current = 0;
       gliding = false;
       scrollTo(0);

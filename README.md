@@ -4,7 +4,7 @@ Scroll, appear, pin and interaction motion for the web. Describe it in HTML
 with a `data-scrollwork` attribute, or in code with `animate()`, `inView()`
 and `scroll()`.
 
-- **About 18 KB gzipped, no dependencies.** One file for a `<script>` tag, or
+- **About 20 KB gzipped, no dependencies.** One file for a `<script>` tag, or
   an ES module for your bundler, with TypeScript types. WebGL effects are a
   separate, optional file (`scrollwork/fx`, about 8 KB).
 - **Declarative first.** Text that rises line by line, parallax, pinned
@@ -106,8 +106,11 @@ defaults, is in [docs/REFERENCE.md](docs/REFERENCE.md).
 | Key | What it does |
 |---|---|
 | `appear` | Plays once the element comes into view (its top `offset`% up the screen, or on screen at all once the page is scrolled to its end): `fade`, `slide-up`, `mask`, `blur`, `scale` or a `custom` start state. Text can be split into `lines`, `words` or letters (`chars`), with a stagger. |
-| `scroll` | Follows the scroll position: parallax (`speed`, with `cover` to keep a picture over its clipped box), or `from` and `to` states scrubbed across the element's passage. |
+| `scroll` | Follows the scroll position: parallax (`speed`, with `cover` to keep a picture over its clipped box), or `from` and `to` states scrubbed across the element's passage, or across its own pin (`range: "hold"`). States can tip in 3D (`rotateX`, `rotateY`, `perspective`). |
 | `pin` | Holds the element in place for a stretch of scrolling. |
+| `loop` | A state played over and over while on screen: a marquee (with `fade` for its edges), a spin (with `upright` to keep the children level), a `flipbook` of the children. |
+| `cursor` | The element follows the pointer as the page's cursor, with a `lag`, a `links` state over links, the page's own cursor hidden. |
+| `loader` | The element covers the page as it opens, plays what appears inside it, holds, then leaves; every other appear waits for it. |
 | `hover`, `press` | A state to move to while hovered (or focused by keyboard) or pressed. |
 | `interactions` | The full list: click, key, delay, a video ending and more, changing state, scrolling to an element, or calling your own `custom` action. |
 

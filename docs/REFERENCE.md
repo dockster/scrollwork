@@ -15,6 +15,8 @@ carry `scaleX`, `scaleY`, `fill`, `ink` and `image`:
 | `scale` | multiple | `1` |
 | `scaleX`, `scaleY` | multiple of one axis, on top of `scale` | `1` |
 | `rotate` | degrees | `0` |
+| `rotateX`, `rotateY` | degrees in 3D: tipped back (around the horizontal axis), turned aside (around the vertical one) | `0` |
+| `perspective` | px, how near the eye is for `rotateX` and `rotateY`; smaller is more dramatic | `1000` |
 | `opacity` | 0 to 1, multiplies the element's own | `1` |
 | `blur` | px | `0` |
 | `fill`, `ink` | a CSS colour the background (or the text, the words inside the element included) moves to | the element's own |
@@ -60,7 +62,7 @@ Follows the scroll position.
 | `cover` | `false` | parallax inside a clipping box: scaled up just enough that the drift never shows the box's edge |
 | `from`, `to` | at rest | the states at the start and the end of the range |
 | `keys` | none | steps between them |
-| `range` | `"through"` | `through`: entering to leaving. `in`: until centred. `out`: centred to leaving |
+| `range` | `"through"` | `through`: entering to leaving. `in`: until centred. `out`: centred to leaving. `hold`: a pinned element's own hold, caught to let go (`through` when it is not pinned) |
 | `trigger` | the element | another element whose passage drives it; a pinned trigger drives it across its hold |
 
 ## loop
@@ -78,6 +80,9 @@ width); `{"to": {"rotate": 360}, "duration": 20}` a slow spin.
 | `ease` | `"linear"` | any curve name |
 | `yoyo` | `false` | there and back (`from`, `to`, `from`) instead of starting over |
 | `delay` | `0` | seconds before the first turn |
+| `fade` | `0` | px: both ends of the box that clips the element (its parent) fade out along the axis it moves on, so a marquee's words come from nothing and go into nothing |
+| `upright` | `false` | the element's children are turned back by the loop's rotation, so they stay level while it turns: a ring of pictures orbiting with every picture upright |
+| `flipbook` | `0` | seconds: the element's children are shown one at a time, each for this long, round and round (a burst of pictures); the element itself still moves by `from` and `to` |
 | `keys` | none | steps between `from` and `to` |
 
 ## pin
@@ -88,6 +93,37 @@ Holds the element in place while the page scrolls.
 |---|---|---|
 | `distance` | `600` | px of scrolling |
 | `top` | `0` | px from the top of the view |
+
+## loader
+
+The element covers the page as it opens, plays the appears inside it, holds,
+then leaves; every appear outside it waits until it has gone, and the page
+cannot scroll meanwhile. `{"loader": true}` takes the defaults. One per
+page. Under reduced motion it is gone at once. Put `{"loop": {"flipbook":
+0.5}}` on a box of pictures inside it for a burst of them, and `{"appear":
+{"effect": "roll"}}` on a number for a counter.
+
+| Field | Default | |
+|---|---|---|
+| `hold` | `2.5` | seconds it stays after the page opens |
+| `leave` | `0.6` | seconds it takes to leave |
+| `effect` | `"fade"` | `fade`, or `blur` to blur away as it fades |
+| `once` | `false` | plays once a visit: a later page in the same session skips it (`sessionStorage`) |
+
+## cursor
+
+The element becomes the page's cursor: taken out of the flow, centred on the
+pointer and following it a little behind. `{"cursor": true}` takes the
+defaults. Hidden until the pointer first moves and on devices that cannot
+hover (a phone), so the page reads the same there. Under reduced motion it
+follows with no lag.
+
+| Field | Default | |
+|---|---|---|
+| `lag` | `0.12` | seconds it takes to catch up with the pointer, 0 to 2 |
+| `hide` | `true` | hides the page's own cursor over the root and everything in it (`data-sw-cursor-hidden` on the root, with a rule); it shows again over a field being typed in |
+| `blend` | `"normal"` | `difference` keeps it visible over any colour |
+| `links` | none | a state it moves to over a link, a button or a field, eased over 0.25 s: `{"scale": 2.5}` |
 
 ## hover and press
 

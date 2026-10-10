@@ -1,5 +1,42 @@
 # Changelog
 
+## 1.11.0 (2026-10-10)
+
+- `loader`: an element covers the page as it opens, plays the appears inside
+  it, holds, then fades (or blurs) away; every appear outside it waits until
+  it has gone and the page cannot scroll meanwhile. `once` remembers the
+  visit in sessionStorage. `replay()` plays it again.
+- `loop.flipbook` (seconds): the element's children are shown one at a time,
+  each for that long, round and round: a burst of pictures in a loader, stop
+  motion anywhere.
+
+- `cursor`: an element becomes the page's cursor. It follows the pointer
+  with a `lag`, hides the page's own cursor (`hide`), can `blend` as
+  `difference`, and moves to a `links` state over a link, a button or a
+  field. Hidden until the pointer moves and on devices that cannot hover;
+  positioned in the root's own pixels, so a zoomed preview lines up too.
+- States gain `rotateX`, `rotateY` (degrees in 3D) and `perspective` (px,
+  1000 when left out), painted as a `transform` in front of the element's
+  own; `scroll.range: "hold"` scrubs a pinned element across its own hold.
+  Together they make the pinned section that tips back, shrinks and fades
+  while the next one slides over it: `{"pin": {"distance": 900}, "scroll":
+  {"range": "hold", "to": {"scale": 0.7, "rotateX": 40, "opacity": 0}}}`.
+- `loop.upright`: a loop that rotates turns the element's children back by
+  the same angle every frame, so a ring of cards orbits with every picture
+  level. A child Scrollwork moves itself is turned on top of its own motion;
+  the others are turned directly, and given back their own rotation on stop.
+- `loop.fade` (px): the box that clips a looping element fades out at both
+  ends of the axis the loop moves along, as a marquee's edges do, with a
+  gradient mask on the parent that is taken off on stop. A vertical marquee
+  is the same recipe as the horizontal one, `{"to": {"y": -480}}` over two
+  copies of the column.
+
+- A split text's `ink` comes back to the text's own colour. A word, line or
+  letter was painted against nothing, so a colour in an appear's `from` or
+  `keys` faded through black on its way to the text's colour. Each unit is
+  painted against its element's colour now, so a flash of orange on each word
+  settles on the words as they are.
+
 ## 1.10.0 (2026-10-07)
 
 - An appear on a layer near the bottom of the page plays once the page is

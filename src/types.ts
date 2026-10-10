@@ -17,6 +17,11 @@ export interface MotionState {
   scaleY?: number;
   /** degrees */
   rotate: number;
+  /** degrees, in 3D: tipped back (around the horizontal axis) and turned aside (around the vertical one); 0 when unset */
+  rotateX?: number;
+  rotateY?: number;
+  /** px: how near the eye is for `rotateX` and `rotateY`, smaller is more dramatic; 1000 when unset */
+  perspective?: number;
   /** 0 to 1, multiplies the element's own opacity */
   opacity: number;
   /** px */
@@ -92,11 +97,47 @@ export interface LoopMotion {
   yoyo: boolean;
   /** seconds before the first turn */
   delay: number;
+  /**
+   * px: the two ends of the box that clips the element (its parent) fade
+   * out, along the axis the loop moves on, so a marquee's words come out of
+   * nothing and go into nothing. 0 for none.
+   */
+  fade: number;
+  /**
+   * the element's children are turned the other way by the loop's rotation,
+   * so they stay level while it turns: a ring of pictures that orbits with
+   * every picture upright. Nothing when the loop does not rotate.
+   */
+  upright: boolean;
+  /**
+   * seconds: the element's children are shown one at a time, each for this
+   * long, round and round (a burst of pictures, stop motion); `from`, `to`
+   * and `duration` still move the element itself. 0 for none.
+   */
+  flipbook: number;
   /** steps between `from` and `to` */
   keys?: MotionKey[];
 }
 
-export type ScrollRange = 'through' | 'in' | 'out';
+/**
+ * A loader: the element covers the page as it opens, plays its own appears,
+ * holds, then leaves; every appear outside it waits until it has gone, and
+ * the page cannot scroll meanwhile. One per page. Under reduced motion it
+ * leaves at once.
+ */
+export interface LoaderMotion {
+  /** seconds it stays after the page opens, before leaving */
+  hold: number;
+  /** seconds it takes to leave */
+  leave: number;
+  /** how it leaves: fading, or blurring away as it fades */
+  effect: 'fade' | 'blur';
+  /** plays once a visit: a later page in the same session skips it (sessionStorage) */
+  once: boolean;
+}
+
+/** `hold`: while the element (or its trigger) is pinned, from the start of its hold to the end; `through` when nothing is pinned */
+export type ScrollRange = 'through' | 'in' | 'out' | 'hold';
 
 /** While scrolling: parallax, and values scrubbed by the scroll position. */
 export interface ScrollMotion {
@@ -120,6 +161,24 @@ export interface PinMotion {
   distance: number;
   /** px from the top of the viewport where it holds */
   top: number;
+}
+
+/**
+ * A custom cursor: the element is taken out of the page's flow and follows
+ * the pointer, centred on it, a little behind. Hidden until the pointer first
+ * moves, and on devices that cannot hover; the page's own cursor can be
+ * hidden under it (but shows again over a field being typed in). Under
+ * reduced motion it follows with no lag.
+ */
+export interface CursorMotion {
+  /** seconds it takes to catch up with the pointer; 0 sticks to it */
+  lag: number;
+  /** hide the page's own cursor while it is on screen */
+  hide: boolean;
+  /** how it mixes with what is under it: `difference` keeps it visible on any colour */
+  blend: 'normal' | 'difference';
+  /** the state it moves to while the pointer is over a link, a button or a field (a bigger ring); eased over a quarter of a second */
+  links?: MotionState;
 }
 
 /**
@@ -209,6 +268,10 @@ export interface MotionItem {
   scroll?: ScrollMotion;
   pin?: PinMotion;
   loop?: LoopMotion;
+  /** the element follows the pointer as the page's cursor */
+  cursor?: CursorMotion;
+  /** the element covers the page as it opens and leaves after a hold; appears outside it wait */
+  loader?: LoaderMotion;
   interactions?: Interaction[];
   /** effects played by a plugin given to `start()` (scrollwork/fx); nothing without one */
   fx?: FxSpec[];

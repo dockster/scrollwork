@@ -15,6 +15,10 @@ export interface State {
   scale: number;
   /** degrees */
   rotate: number;
+  /** degrees in 3D, around the horizontal and the vertical axis; `pz` the perspective in px, 0 for the default */
+  rx: number;
+  ry: number;
+  pz: number;
   opacity: number;
   /** px */
   blur: number;
@@ -40,7 +44,7 @@ export interface Pic {
   k: number;
 }
 
-export const identity = (): State => ({ x: 0, y: 0, yp: 0, scale: 1, rotate: 0, opacity: 1, blur: 0, clip: 0, sx: 1, sy: 1, fill: null, ink: null, image: null });
+export const identity = (): State => ({ x: 0, y: 0, yp: 0, scale: 1, rotate: 0, rx: 0, ry: 0, pz: 0, opacity: 1, blur: 0, clip: 0, sx: 1, sy: 1, fill: null, ink: null, image: null });
 
 const mixRgba = (a: Rgba, b: Rgba, k: number): Rgba => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k, a[3] + (b[3] - a[3]) * k];
 /** between two tints: the colour too when both have one, and how far along */
@@ -64,6 +68,9 @@ export const mix = (a: State, b: State, k: number): State => ({
   yp: a.yp + (b.yp - a.yp) * k,
   scale: a.scale + (b.scale - a.scale) * k,
   rotate: a.rotate + (b.rotate - a.rotate) * k,
+  rx: a.rx + (b.rx - a.rx) * k,
+  ry: a.ry + (b.ry - a.ry) * k,
+  pz: a.pz && b.pz ? a.pz + (b.pz - a.pz) * k : a.pz || b.pz,
   opacity: a.opacity + (b.opacity - a.opacity) * k,
   blur: Math.max(0, a.blur + (b.blur - a.blur) * k),
   clip: a.clip + (b.clip - a.clip) * k,
@@ -82,6 +89,9 @@ export const combine = (a: State, b: State): State => ({
   yp: a.yp + b.yp,
   scale: a.scale * b.scale,
   rotate: a.rotate + b.rotate,
+  rx: a.rx + b.rx,
+  ry: a.ry + b.ry,
+  pz: a.pz || b.pz,
   opacity: a.opacity * b.opacity,
   blur: a.blur + b.blur,
   clip: Math.max(a.clip, b.clip),
@@ -120,6 +130,7 @@ export interface Inline {
   translate: string;
   scale: string;
   rotate: string;
+  transform: string;
   opacity: string;
   filter: string;
   clipPath: string;
@@ -144,7 +155,7 @@ export interface Base {
   inline: Inline;
 }
 
-export const BLANK: Inline = { translate: '', scale: '', rotate: '', opacity: '', filter: '', clipPath: '', backgroundColor: '', color: '', backgroundImage: '', src: '' };
+export const BLANK: Inline = { translate: '', scale: '', rotate: '', transform: '', opacity: '', filter: '', clipPath: '', backgroundColor: '', color: '', backgroundImage: '', src: '' };
 /** an element of Scrollwork's own making (split text): nothing of the author's to keep */
 export const NONE: Base = { t: [], s: [], rot: 0, opacity: 1, filter: '', bg: [0, 0, 0, 0], ink: [0, 0, 0, 1], inline: BLANK };
 
@@ -155,12 +166,13 @@ export const NONE: Base = { t: [], s: [], rot: 0, opacity: 1, filter: '', bg: [0
  * and that is the author's value from then on.
  */
 type Held = HTMLElement & { __scrollwork?: Inline; __scrollworkPaint?: Inline; __scrollworkHolds?: number; __scrollworkBare?: boolean };
-const KEYS = ['translate', 'scale', 'rotate', 'opacity', 'filter', 'clipPath', 'backgroundColor', 'color', 'backgroundImage', 'src'] as const;
+const KEYS = ['translate', 'scale', 'rotate', 'transform', 'opacity', 'filter', 'clipPath', 'backgroundColor', 'color', 'backgroundImage', 'src'] as const;
 const isImg = (el: HTMLElement): el is HTMLImageElement => el.tagName === 'IMG';
 const current = (el: HTMLElement): Inline => ({
   translate: el.style.translate,
   scale: el.style.scale,
   rotate: el.style.rotate,
+  transform: el.style.transform,
   opacity: el.style.opacity,
   filter: el.style.filter,
   clipPath: el.style.clipPath,
@@ -174,6 +186,7 @@ export const putInline = (el: HTMLElement, v: Inline) => {
   el.style.translate = v.translate;
   el.style.scale = v.scale;
   el.style.rotate = v.rotate;
+  el.style.transform = v.transform;
   el.style.opacity = v.opacity;
   el.style.filter = v.filter;
   el.style.clipPath = v.clipPath;
@@ -299,6 +312,8 @@ export function paint(el: HTMLElement, s: State, b: Base) {
     el.style.scale = sx + ' ' + sy + (b.s[2] !== undefined ? ' ' + b.s[2] : '');
   } else el.style.scale = b.inline.scale;
   el.style.rotate = s.rotate && !Number.isNaN(b.rot) ? b.rot + s.rotate + 'deg' : b.inline.rotate;
+  // 3D: a perspective and the tips, in front of whatever transform the element has of its own
+  el.style.transform = s.rx || s.ry ? 'perspective(' + (s.pz || 1000) + 'px) rotateX(' + s.rx + 'deg) rotateY(' + s.ry + 'deg)' + (b.inline.transform ? ' ' + b.inline.transform : '') : b.inline.transform;
   el.style.opacity = s.opacity < 0.999 ? String(Math.max(0, b.opacity * s.opacity)) : b.inline.opacity;
   el.style.filter = s.blur > 0.01 ? 'blur(' + s.blur + 'px)' + (b.filter ? ' ' + b.filter : '') : b.inline.filter;
   el.style.clipPath = s.clip > 0.01 ? 'inset(0 0 ' + s.clip + '% 0)' : b.inline.clipPath;

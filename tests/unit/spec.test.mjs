@@ -187,7 +187,47 @@ test('loop: defaults, clamps, and nothing without one', async () => {
   assert.equal(s.items[0].loop.duration, 12.8);
   assert.equal(s.items[0].loop.ease, 'linear');
   assert.equal(s.items[0].loop.yoyo, false);
+  assert.equal(s.items[0].loop.fade, 0);
+  const f = readSpec({ items: [{ id: 'm', loop: { to: { y: -480 }, fade: 64 } }, { id: 'n', loop: { to: { y: -480 }, fade: -3 } }] }, false);
+  assert.equal(f.items[0].loop.fade, 64);
+  assert.equal(f.items[1].loop.fade, 0, 'a negative fade is none');
+  assert.equal(f.items[0].loop.upright, false);
+  const u = readSpec({ items: [{ id: 'ring', loop: { to: { rotate: 360 }, duration: 32, upright: true } }, { id: 'no', loop: { to: { rotate: 360 }, upright: 'yes' } }] }, false);
+  assert.equal(u.items[0].loop.upright, true);
+  assert.equal(u.items[1].loop.upright, false, 'only true is upright');
   assert.equal(s.items[1].loop.duration, 0.05);
   assert.equal(s.items[1].loop.yoyo, true);
   assert.equal(s.items[2].loop, undefined);
+});
+
+test('3D states: rotateX, rotateY and perspective read only when given; hold is a scroll range', async () => {
+  const { readSpec } = await load('spec');
+  const s = readSpec({ items: [{ id: 'a', scroll: { range: 'hold', to: { scale: 0.7, rotateX: 40, opacity: 0 } }, pin: { distance: 900 } }, { id: 'b', scroll: { to: { rotateY: '12', perspective: 0 } } }] }, false);
+  assert.equal(s.items[0].scroll.range, 'hold');
+  assert.equal(s.items[0].scroll.to.rotateX, 40);
+  assert.equal('rotateY' in s.items[0].scroll.to, false);
+  assert.equal('perspective' in s.items[0].scroll.from, false);
+  assert.equal(s.items[1].scroll.to.rotateY, 12);
+  assert.equal(s.items[1].scroll.to.perspective, 1, 'a perspective is at least 1px');
+});
+
+test('cursor: true takes the defaults; fields are read and clamped; a links state', async () => {
+  const { readSpec } = await load('spec');
+  const s = readSpec({ items: [{ id: 'dot', cursor: true }, { id: 'ring', cursor: { lag: 5, hide: false, blend: 'difference', links: { scale: 2.5 } } }, { id: 'no', cursor: false }, { id: 'bad', cursor: { blend: 'glow' } }] }, false);
+  assert.deepEqual(s.items[0].cursor, { lag: 0.12, hide: true, blend: 'normal' });
+  assert.equal(s.items[1].cursor.lag, 2, 'a lag is at most 2 s');
+  assert.equal(s.items[1].cursor.hide, false);
+  assert.equal(s.items[1].cursor.blend, 'difference');
+  assert.equal(s.items[1].cursor.links.scale, 2.5);
+  assert.equal('cursor' in s.items[2], false);
+  assert.equal(s.items[3].cursor.blend, 'normal');
+});
+
+test('loader: true takes the defaults, fields are clamped; flipbook is a loop field', async () => {
+  const { readSpec } = await load('spec');
+  const s = readSpec({ items: [{ id: 'l', loader: true }, { id: 'm', loader: { hold: 99, leave: -1, effect: 'blur', once: true } }, { id: 'b', loop: { flipbook: 0.5 } }, { id: 'n', loop: { flipbook: -2 } }] }, false);
+  assert.deepEqual(s.items[0].loader, { hold: 2.5, leave: 0.6, effect: 'fade', once: false });
+  assert.deepEqual(s.items[1].loader, { hold: 60, leave: 0, effect: 'blur', once: true });
+  assert.equal(s.items[2].loop.flipbook, 0.5);
+  assert.equal(s.items[3].loop.flipbook, 0);
 });

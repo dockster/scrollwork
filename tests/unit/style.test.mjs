@@ -38,3 +38,14 @@ test('a computed colour reads as numbers', () => {
   assert.deepEqual(rgba('rgb(1 2 3 / 50%)'), [1, 2, 3, 0.5]);
   assert.deepEqual(rgba('color(srgb 1 0 0)'), [0, 0, 0, 0]);
 });
+
+test('3D tips mix and add; the perspective is the one given', () => {
+  const to = { ...identity(), rx: 40, ry: -10, pz: 800 };
+  const half = mix(identity(), to, 0.5);
+  assert.equal(half.rx, 20);
+  assert.equal(half.ry, -5);
+  assert.equal(half.pz, 800, 'a default (0) mixes to the given perspective, not halfway to nothing');
+  const both = combine({ ...identity(), rx: 10 }, { ...identity(), rx: 5, pz: 600 });
+  assert.equal(both.rx, 15);
+  assert.equal(both.pz, 600);
+});
