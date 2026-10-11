@@ -355,6 +355,7 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
   // ── a loader: covers the page as it opens, holds, leaves; every appear outside it waits ──
   // t0 is -1 until the first frame with a clock; `inside` are the elements it holds, whose appears play meanwhile
   let loader: { e: Entry; inside: Set<HTMLElement>; t0: number; t1: number; phase: 'hold' | 'leave' | 'done'; key: string } | null = null;
+  const markLoading = (on: boolean) => (on ? root.setAttribute('data-sw-loading', '') : root.removeAttribute('data-sw-loading'));
   const loaderEntry = opts.seekOnly ? undefined : entries.find((e) => e.item.loader);
   if (loaderEntry) {
     const el = loaderEntry.el;
@@ -386,6 +387,10 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
     if (onPage) {
       st.position = 'fixed';
       st.inset = '0';
+      // the window's size, not the size it was drawn at: a width or height from the page's own CSS
+      // (an export's 1440x900 screen) beats the inset and leaves part of the window uncovered
+      st.width = 'auto';
+      st.height = 'auto';
     } else {
       st.position = 'absolute';
       st.inset = 'auto';
@@ -394,6 +399,9 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
     st.margin = '0';
     st.zIndex = '2147482000';
     if (loader.phase === 'done') st.display = 'none';
+    // the root says a loader is up, for a host that holds layers over it outside the root's reach (a preview's fixed layers)
+    markLoading(loader.phase !== 'done');
+    restores.push(() => markLoading(false));
   }
   /** the page cannot scroll while the loader holds: the scroller's overflow, put back when it leaves */
   const lockEl = scroller || root.ownerDocument.documentElement;
@@ -409,6 +417,7 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
     if (!loader) return;
     loader.phase = 'done';
     loader.e.el.style.display = 'none';
+    markLoading(false);
     lockScroll(false);
     if (loader.e.item.loader!.once) {
       try {
@@ -1615,6 +1624,7 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
         loader.phase = 'hold';
         loader.t0 = -1;
         loader.e.el.style.display = '';
+        markLoading(true);
       }
       target = current = 0;
       gliding = false;

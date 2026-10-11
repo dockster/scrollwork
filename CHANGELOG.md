@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.11.1 (2026-10-10)
+
+- A `loader` on the page covers the whole window. It kept the width and
+  height the page's CSS gave it (an exported 1440x900 screen) inside
+  `position: fixed; inset: 0`, so a wider window showed a strip of the page
+  beside it and a shorter one hid its bottom edge.
+- The root carries `data-sw-loading` while a loader is up, and loses it when
+  the loader has left (again on `replay()`): a host that holds layers over
+  the root outside its stacking context can lift the root above them.
+
 ## 1.11.0 (2026-10-10)
 
 - `loader`: an element covers the page as it opens, plays the appears inside

@@ -125,6 +125,29 @@ for (const name of BROWSERS) {
     await ctx.close();
   }
 
+  // ── a loader on the page covers the window, whatever size its CSS gives it ──
+  {
+    const { p, ctx, errors } = await page(
+      browser,
+      `<style>.screen{width:1440px;height:900px;background:#fff}</style><div id="ld" class="screen" data-m="ld">loading</div><div style="height:2000px">page</div>`
+    );
+    await p.evaluate(() => {
+      window.sw = window.Scrollwork.start({ items: [{ id: 'ld', text: false, loader: { hold: 0.4, leave: 0.2, effect: 'fade', once: false } }], smooth: false }, { attr: 'data-m', root: document.body, scroller: null, reduced: false, split: false });
+    });
+    await sleep(100);
+    const up = await p.evaluate(() => {
+      const r = document.getElementById('ld').getBoundingClientRect();
+      return { w: Math.round(r.width), h: Math.round(r.height), vw: innerWidth, vh: innerHeight, mark: document.body.hasAttribute('data-sw-loading') };
+    });
+    check(tag('a loader drawn 1440x900 covers the window'), up.w === up.vw && up.h === up.vh, JSON.stringify(up));
+    check(tag('the root is marked while it holds'), up.mark);
+    await sleep(1000);
+    const gone = await p.evaluate(() => ({ mark: document.body.hasAttribute('data-sw-loading'), display: getComputedStyle(document.getElementById('ld')).display }));
+    check(tag('and unmarked once it has left'), !gone.mark && gone.display === 'none', JSON.stringify(gone));
+    check(tag('no errors (loader size)'), errors.length === 0, errors.join(' | '));
+    await ctx.close();
+  }
+
   // ── reduced motion keeps delays ──
   {
     const { p, ctx, errors } = await page(browser, `<div id="t" data-m="t">splash</div>`, { reduced: true });

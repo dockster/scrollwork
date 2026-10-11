@@ -110,7 +110,7 @@ defaults, is in [docs/REFERENCE.md](docs/REFERENCE.md).
 | `pin` | Holds the element in place for a stretch of scrolling. |
 | `loop` | A state played over and over while on screen: a marquee (with `fade` for its edges), a spin (with `upright` to keep the children level), a `flipbook` of the children. |
 | `cursor` | The element follows the pointer as the page's cursor, with a `lag`, a `links` state over links, the page's own cursor hidden. |
-| `loader` | The element covers the page as it opens, plays what appears inside it, holds, then leaves; every other appear waits for it. |
+| `loader` | The element covers the page as it opens, plays what appears inside it, holds, then leaves; every other appear waits for it. The root carries `data-sw-loading` while it is up. |
 | `hover`, `press` | A state to move to while hovered (or focused by keyboard) or pressed. |
 | `interactions` | The full list: click, key, delay, a video ending and more, changing state, scrolling to an element, or calling your own `custom` action. |
 
