@@ -26,7 +26,8 @@ execFileSync('npx', ['tsc', '-p', 'tsconfig.json'], { stdio: 'inherit' });
 // flipbook) are budgeted at 21 KB together (docs/FOURMULA-EFFECTS-PLAN.md in uxdeck);
 // 1.12's rollovers (letter roll, wipe, with a screen reader's copy and keyboard focus) take it to 22.0
 // (docs/LETTER-ROLL-PLAN.md in uxdeck); the budget allows half a KB over, rather than trimming working code for bytes
-const BUDGET = { 'scrollwork.min.js': 22.5, 'scrollwork-fx.min.js': 8 };
+// the effects add-on grew to 8.9 with pixel distortion in 1.13.0 (Codrops' Distorted Pixels): 9
+const BUDGET = { 'scrollwork.min.js': 22.5, 'scrollwork-fx.min.js': 9 };
 let over = '';
 for (const f of ['scrollwork.mjs', 'scrollwork.js', 'scrollwork.min.js', 'fx.mjs', 'scrollwork-fx.js', 'scrollwork-fx.min.js']) {
   const b = readFileSync(`dist/${f}`);

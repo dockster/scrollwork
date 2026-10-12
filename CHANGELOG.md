@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.13.0 (2026-10-12)
+
+- scrollwork/fx `distort`: pixel distortion, after Codrops' Distorted Pixels
+  (MIT, © Codrops; docs/THIRD-PARTY.md). The pointer pushes the picture's
+  cells along its path and they ease back; `grid`, `mouse` (reach), `strength`
+  and `relaxation` as in the original, its demo 1 the defaults. On `appear` it
+  opens scrambled and settles in. Nothing draws at rest or once settled;
+  reduced motion shows the picture as it is.
+- scrollwork-fx.min.js is 8.9 KB gzipped (the budget is 9).
+
 ## 1.12.0 (2026-10-11)
 
 - `rollover`: a button's hover effect, drawn by CSS transitions so it reverses

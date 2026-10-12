@@ -6,7 +6,7 @@ and `scroll()`.
 
 - **About 22 KB gzipped, no dependencies.** One file for a `<script>` tag, or
   an ES module for your bundler, with TypeScript types. WebGL effects are a
-  separate, optional file (`scrollwork/fx`, about 8 KB).
+  separate, optional file (`scrollwork/fx`, about 9 KB).
 - **Declarative first.** Text that rises line by line, parallax, pinned
   sections and hover states come from data, not code.
 - **Leaves your styles alone.** Motion is added to what the element already
@@ -185,8 +185,10 @@ blank. An element that cannot hold a child (`<img>`, `<video>`) is left alone;
 put the picture on a `<div>`'s background instead.
 
 Effects: `glitch` (blocks of the picture shift and the colours split while
-hovering) and `dither` (a crisp field of bayer or halftone dots over a drifting
-cloud or the element's picture, with a pointer trail). More follow.
+hovering), `dither` (a crisp field of bayer or halftone dots over a drifting
+cloud or the element's picture, with a pointer trail) and `distort` (the
+pointer pushes the picture's cells along its path and they ease back, after
+Codrops' Distorted Pixels). More follow.
 
 ## Accessibility
 
@@ -237,3 +239,7 @@ npm run test:browsers   # Chromium, WebKit and Firefox (after the build)
 ## License
 
 MIT, © 2026 uxspot.io
+
+The `distort` effect follows Codrops' Distorted Pixels
+(github.com/codrops/DistortedPixels, MIT, © Codrops); its notice is in
+[docs/THIRD-PARTY.md](docs/THIRD-PARTY.md).

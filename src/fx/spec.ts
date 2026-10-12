@@ -11,6 +11,8 @@ const ONS: readonly FxOn[] = ['hover', 'appear', 'always', 'scroll'];
 export const FX_DEFAULTS: { [T in FxType]: Omit<Extract<Fx, { type: T }>, 'type'> } = {
   glitch: { on: 'hover', intensity: 0.6, speed: 1, seed: 0, in: 0.12, out: 0.35, blocks: 24, split: 6 },
   dither: { on: 'always', intensity: 0.7, speed: 1, seed: 0, in: 0.2, out: 0.6, mode: 'bayer', size: 2, scale: 420, color: '#000000', color2: 'transparent', accent: '#B3FDD0', radius: 90, trail: 0.35 },
+  // Codrops' demo 1: big cells, a short reach, settling fast
+  distort: { on: 'hover', intensity: 1, speed: 1, seed: 0, in: 0.2, out: 0.6, grid: 50, mouse: 0.25, strength: 0.11, relaxation: 0.9 },
 };
 
 /** fields that name one of a few choices */
@@ -68,7 +70,13 @@ const RANGES: Record<string, [number, number]> = {
   scale: [10, 4000],
   radius: [0, 2000],
   trail: [0, 5],
+  grid: [2, 1000],
+  mouse: [0, 1],
+  strength: [0, 1],
+  relaxation: [0, 0.999],
 };
+/** numeric fields that are whole numbers */
+const WHOLE = new Set(['grid']);
 
 /** One effect, filled in and checked; null when its type is not one this build plays. */
 export function readOneFx(v: unknown, note: (m: string) => void, what: string): Fx | null {
@@ -108,7 +116,8 @@ export function readOneFx(v: unknown, note: (m: string) => void, what: string): 
       }
     } else if (typeof d === 'number') {
       const [lo, hi] = RANGES[key] || [-Infinity, Infinity];
-      out[key] = num(v[key], d, lo, hi, note, `${what}.${key}`);
+      const n = num(v[key], d, lo, hi, note, `${what}.${key}`);
+      out[key] = WHOLE.has(key) ? Math.round(n) : n;
     } else out[key] = v[key] === undefined ? d : v[key];
   }
   return out as unknown as Fx;

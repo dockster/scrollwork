@@ -12,8 +12,9 @@
 import { program, setUniforms, texture, triangle, type Program } from './gl.js';
 import { GLITCH } from './shaders/glitch.js';
 import { DITHER } from './shaders/dither.js';
+import { DISTORT } from './shaders/distort.js';
 import { rgbaOf } from './spec.js';
-import type { Fx, FxType, TexState } from './types.js';
+import type { DistortFx, Fx, FxType, TexState } from './types.js';
 import type { Signals } from '../types.js';
 
 export interface SurfaceOptions {
@@ -63,11 +64,118 @@ export interface Host {
   /** the clock when it was added: each host's time starts at 0 */
   t0: number;
   shown: boolean;
+  /** a pixel distortion's grid, when the host has one (distort) */
+  dist: Distortion | null;
   /** what to undo on stop */
   position: string | null;
   /** a field's host is isolated so its view can sit behind its children; the inline value it had */
   isolation: string | null;
   off: Array<() => void>;
+}
+
+/**
+ * A pixel distortion's state (after Codrops' Distorted Pixels, MIT): a
+ * size x size grid of x, y offsets, uploaded as an RG32F texture each frame it
+ * moves, and the pointer's last move, in host fractions.
+ */
+export interface Distortion {
+  fx: DistortFx;
+  size: number;
+  /** x, y per cell, row by row from the bottom */
+  data: Float32Array;
+  tex: WebGLTexture | null;
+  /** the texture holds a grid of this size */
+  texSize: number;
+  vx: number;
+  vy: number;
+  /** the pointer's last position over the host, for its velocity; null after it left */
+  prev: [number, number] | null;
+  /** nothing is offset and nothing pushes: the picture shows as it is */
+  settled: boolean;
+}
+
+/** offsets smaller than this are nothing (0.02 of it is under a thousandth of the picture) */
+const REST = 0.02;
+
+/** A small seeded random, so the opening scramble is the same for a seed. */
+const seeded = (seed: number) => {
+  let t = (seed * 2654435761) >>> 0 || 1;
+  return () => {
+    t ^= t << 13;
+    t ^= t >>> 17;
+    t ^= t << 5;
+    return (t >>> 0) / 4294967296;
+  };
+};
+
+/**
+ * A grid for a distortion. On `appear` it opens scrambled, every cell pushed
+ * at random as Codrops' regenerateGrid does, and settles into the picture as
+ * the host comes into view; otherwise it starts at rest.
+ */
+const distortion = (fx: DistortFx): Distortion => {
+  const size = fx.grid;
+  const data = new Float32Array(size * size * 2);
+  if (fx.on === 'appear') {
+    const rnd = seeded(fx.seed + 1);
+    for (let i = 0; i < data.length; i++) data[i] = rnd() * 255 - 125;
+  }
+  return { fx, size, data, tex: null, texSize: 0, vx: 0, vy: 0, prev: null, settled: fx.on !== 'appear' };
+};
+
+/**
+ * One frame of a distortion: every offset relaxes, the cells within the
+ * pointer's reach are pushed along its last move (k: how far the effect is
+ * driven), and the move fades. The original's numbers, at 60 frames a second:
+ * `speed` runs its clock faster or slower. True while anything is offset.
+ */
+export function stepDistortion(d: Distortion, k: number, px: number, py: number, aspect: number, dt: number): boolean {
+  const { fx, size, data } = d;
+  const frames = (Math.min(dt, 100) / (1000 / 60)) * fx.speed;
+  const keep = Math.pow(fx.relaxation, frames);
+  let most = 0;
+  for (let i = 0; i < data.length; i++) {
+    const v = (data[i] *= keep);
+    const a = v < 0 ? -v : v;
+    if (a > most) most = a;
+  }
+  const push = fx.strength * fx.intensity * k * 100;
+  const moving = Math.abs(d.vx) + Math.abs(d.vy) > 1e-5;
+  if (push > 0 && moving) {
+    const gx = size * px;
+    const gy = size * (1 - py);
+    const reach = size * fx.mouse;
+    const reach2 = reach * reach;
+    // only the cells that can be within reach: the box around the pointer, the x reach widened by the aspect
+    const rx = Math.ceil(reach * Math.sqrt(Math.max(aspect, 1e-6)));
+    const i0 = Math.max(0, Math.floor(gx - rx));
+    const i1 = Math.min(size - 1, Math.ceil(gx + rx));
+    const j0 = Math.max(0, Math.floor(gy - reach));
+    const j1 = Math.min(size - 1, Math.ceil(gy + reach));
+    for (let i = i0; i <= i1; i++) {
+      for (let j = j0; j <= j1; j++) {
+        const dist = (gx - i) ** 2 / aspect + (gy - j) ** 2;
+        if (dist >= reach2) continue;
+        const power = Math.min(10, Math.max(0, reach / Math.sqrt(dist)));
+        const at = 2 * (i + size * j);
+        data[at] += push * d.vx * power;
+        data[at + 1] -= push * d.vy * power;
+        const a = Math.max(Math.abs(data[at]), Math.abs(data[at + 1]));
+        if (a > most) most = a;
+      }
+    }
+  }
+  const fade = Math.pow(0.9, frames);
+  d.vx *= fade;
+  d.vy *= fade;
+  if (most < REST && !(Math.abs(d.vx) + Math.abs(d.vy) > 1e-5 && push > 0)) {
+    data.fill(0);
+    d.vx = d.vy = 0;
+    d.settled = true;
+    return false;
+  }
+  d.settled = false;
+  return true;
 }
 
 export interface Surface {
@@ -82,9 +190,9 @@ export interface Surface {
   readonly hosts: ReadonlyMap<HTMLElement, Host>;
 }
 
-const SHADERS: Record<FxType, string> = { glitch: GLITCH, dither: DITHER };
+const SHADERS: Record<FxType, string> = { glitch: GLITCH, dither: DITHER, distort: DISTORT };
 /** effects that leave the picture as it is at k 0: at rest the host's own picture shows and nothing draws */
-const IDLE_IDENTITY: Record<FxType, boolean> = { glitch: true, dither: false };
+const IDLE_IDENTITY: Record<FxType, boolean> = { glitch: true, dither: false, distort: true };
 const STYLE = '.ux-motion-fx{position:absolute;inset:0;width:100%;height:100%;border-radius:inherit;pointer-events:none;display:block}.ux-motion-fx.is-crisp{image-rendering:pixelated}.ux-motion-fx.is-field{z-index:-1}';
 /** hosts that cannot hold a child canvas */
 const NO_CHILD = /^(IMG|VIDEO|CANVAS|INPUT|TEXTAREA|SELECT|svg|IFRAME|BR|HR)$/;
@@ -177,6 +285,7 @@ export function createSurface(o: SurfaceOptions): Surface | null {
     for (const h of hosts.values()) {
       h.tex = null;
       h.texState = 'none';
+      if (h.dist) h.dist.tex = null;
       loadPicture(h);
     }
     wake();
@@ -350,6 +459,28 @@ export function createSurface(o: SurfaceOptions): Surface | null {
     return wide ? [ha / ta, 1] : [1, ta / ha];
   };
 
+  /** a distortion's grid uploaded, as RG32F (WebGL2 samples float textures when nearest-filtered), on texture unit 1 */
+  const offsets = (d: Distortion, p: Program) => {
+    gl.activeTexture(gl.TEXTURE1);
+    if (!d.tex) {
+      d.tex = gl.createTexture();
+      d.texSize = 0;
+    }
+    gl.bindTexture(gl.TEXTURE_2D, d.tex);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 4);
+    if (d.texSize !== d.size) {
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG32F, d.size, d.size, 0, gl.RG, gl.FLOAT, d.data);
+      d.texSize = d.size;
+    } else gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, d.size, d.size, gl.RG, gl.FLOAT, d.data);
+    const loc = p.uniforms.get('u_offsets');
+    if (loc) gl.uniform1i(loc, 1);
+    gl.activeTexture(gl.TEXTURE0);
+  };
+
   const renderHost = (h: Host, ks: number[], now: number): boolean => {
     const [w, hh] = bitmapSize(h);
     if (off.width !== w || off.height !== hh) {
@@ -373,6 +504,7 @@ export function createSurface(o: SurfaceOptions): Surface | null {
       gl.bindTexture(gl.TEXTURE_2D, source);
       const uni = p.uniforms.get('u_tex');
       if (uni) gl.uniform1i(uni, 0);
+      if (fx.type === 'distort' && h.dist) offsets(h.dist, p);
       const values: Record<string, number | readonly number[]> = {
         u_res: [w, hh],
         u_fit: i === 0 ? fit : [1, 1],
@@ -469,6 +601,7 @@ export function createSurface(o: SurfaceOptions): Surface | null {
         crisp: fx.some((f) => f.type === 'dither'),
         field: fx.some((f) => f.type === 'dither'),
         t0: win.performance.now(),
+        dist: null,
         shown: false,
         position,
         isolation,
@@ -501,14 +634,32 @@ export function createSurface(o: SurfaceOptions): Surface | null {
       // keyboard focus gets the same effect as the pointer
       on('focusin', enter);
       on('focusout', leave);
+      const distortFx = fx.find((f): f is DistortFx => f.type === 'distort');
+      if (distortFx) h.dist = distortion(distortFx);
       on('pointermove', (ev) => {
         const e = ev as PointerEvent;
         const b = el.getBoundingClientRect();
         if (b.width && b.height) {
-          h.px = Math.min(1, Math.max(0, (e.clientX - b.left) / b.width));
-          h.py = Math.min(1, Math.max(0, (e.clientY - b.top) / b.height));
+          const x = (e.clientX - b.left) / b.width;
+          const y = (e.clientY - b.top) / b.height;
+          h.px = Math.min(1, Math.max(0, x));
+          h.py = Math.min(1, Math.max(0, y));
+          // a distortion is pushed by the pointer's move since its last event, in host fractions
+          const d = h.dist;
+          if (d) {
+            if (d.prev) {
+              d.vx = x - d.prev[0];
+              d.vy = y - d.prev[1];
+              d.settled = false;
+            }
+            d.prev = [x, y];
+          }
         }
         wake();
+      });
+      // leaving and coming back is not a move across the gap
+      on('pointerleave', () => {
+        if (h.dist) h.dist.prev = null;
       });
       hosts.set(el, h);
       if (h.field) listenPointer();
@@ -526,6 +677,7 @@ export function createSurface(o: SurfaceOptions): Surface | null {
       for (const f of h.off) f();
       h.view.remove();
       if (h.tex) gl.deleteTexture(h.tex);
+      if (h.dist?.tex) gl.deleteTexture(h.dist.tex);
       if (h.position !== null) el.style.position = h.position;
       if (h.isolation !== null) el.style.isolation = h.isolation;
     },
@@ -555,7 +707,13 @@ export function createSurface(o: SurfaceOptions): Surface | null {
           continue;
         }
         const s = read(h.el);
-        const ks = h.fx.map((f) => drive(f, h, s));
+        // a distortion is drawn while its grid is offset; the drive decides how hard the pointer pushes it
+        const ks = h.fx.map((f) => {
+          const k = drive(f, h, s);
+          if (f.type !== 'distort' || !h.dist) return k;
+          stepDistortion(h.dist, k, h.px, h.py, h.w ? h.h / h.w : 1, dt);
+          return h.dist.settled ? 0 : 1;
+        });
         // at rest the picture itself shows: nothing to draw, nothing to keep awake
         if (ks.every((k, i) => k <= 0 && IDLE_IDENTITY[h.fx[i].type])) {
           hide(h);

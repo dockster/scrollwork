@@ -333,6 +333,32 @@ A field draws behind the element's children and over its own background, as a
 background picture would: the element is isolated (`isolation: isolate`) while
 the effect plays, and given back on stop.
 
+### distort
+
+Pixel distortion, after Codrops' Distorted Pixels (MIT, © Codrops; see
+[THIRD-PARTY.md](THIRD-PARTY.md)). The picture is cut into a grid of cells;
+the pointer moving over the element pushes the cells near it along its own
+direction, and each cell eases back to its place. Big cells read as blocks,
+many small ones as a liquid smear. At rest the picture is itself and nothing
+draws; it stops drawing once every cell is back.
+
+| Field | Default | |
+|---|---|---|
+| `on` | `"hover"` | how hard the pointer pushes: `hover` while it is over the element; `appear` also opens scrambled, each cell pushed at random (from `seed`), and settles as the element comes into view |
+| `intensity` | `1` | multiplies `strength` |
+| `speed` | `1` | runs its settling faster or slower |
+| `grid` | `50` | cells across and down, 2 to 1000, whole |
+| `mouse` | `0.25` | the pointer's reach, a fraction of the grid, 0 to 1 |
+| `strength` | `0.11` | how far a push moves the cells, 0 to 1 |
+| `relaxation` | `0.9` | what a cell keeps of its offset each frame (at 60 a second), 0 to 0.999: 0.9 settles in about half a second, 0.96 lingers |
+| `in`, `out` | `0.2`, `0.6` | seconds for the hover to come in and go out |
+
+Codrops' two demos: `{"grid": 50, "mouse": 0.25, "strength": 0.11}` (the
+defaults) and `{"grid": 607, "mouse": 0.11, "strength": 0.36, "relaxation":
+0.96}`. A picture effect, read as `glitch` reads it (its `background-image`,
+with CORS). The offsets are an RG32F texture, sampled nearest, which WebGL2
+reads without an extension. Under reduced motion the picture shows as it is.
+
 ## start(spec, options)
 
 A spec is `{ "version": 1, "items": [...], "smooth": false }`. Each item has an

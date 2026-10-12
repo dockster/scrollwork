@@ -819,6 +819,76 @@ for (const name of BROWSERS) {
     await ctx.close();
   }
 
+  // ── scrollwork/fx distort: the pointer pushes the picture's cells, which ease back (1.13.0, Codrops' Distorted Pixels) ──
+  {
+    const fxScript = '<script src="/scrollwork.min.js"></script><script src="/scrollwork-fx.min.js"></script>';
+    // stripes 10px wide, red and blue: a pushed cell shows the other colour where the picture had one
+    const picture = `<script>(() => { const c = document.createElement('canvas'); c.width = 60; c.height = 40; const x = c.getContext('2d'); for (let i = 0; i < 6; i++) { x.fillStyle = i % 2 ? '#1030f0' : '#f01030'; x.fillRect(i * 10, 0, 10, 40); } window.__pic = c.toDataURL(); window.__picCanvas = c; })();</script>`;
+    const body = `<div style="height:40px"></div><div id="d" style="width:300px;height:200px;margin-left:20px;background:url() center / cover" data-scrollwork='{"fx":[{"type":"distort","in":0.01,"grid":20,"mouse":0.4,"strength":0.6}]}'></div><div style="height:1200px"></div>`;
+    const { p, ctx, errors } = await page(browser, picture + body, { counting: true, script: fxScript });
+    const able = await p.evaluate(() => {
+      document.getElementById('d').style.backgroundImage = `url(${window.__pic})`;
+      const can = typeof OffscreenCanvas !== 'undefined' && !!new OffscreenCanvas(1, 1).getContext('webgl2') && !!document.createElement('canvas').getContext('bitmaprenderer');
+      window.sw = window.Scrollwork.auto(document.body, { plugins: [window.ScrollworkFx.fx] });
+      return can;
+    });
+    if (!able) {
+      check(tag('distort: no WebGL2 here, the page plays without it'), errors.length === 0, errors.join(' | '));
+    } else {
+      await sleep(400);
+      const view = () => p.evaluate(() => getComputedStyle(document.querySelector('#d > canvas.ux-motion-fx')).display);
+      check(tag('distort: at rest nothing draws, the picture shows itself'), (await view()) === 'none');
+      // how far the drawn frame is from the picture as it is: pixels whose colour is clearly the other stripe's
+      const apart = () =>
+        p.evaluate(() => {
+          const v = document.querySelector('#d > canvas.ux-motion-fx');
+          const c = document.createElement('canvas'); c.width = v.width; c.height = v.height;
+          const x = c.getContext('2d'); x.drawImage(v, 0, 0);
+          const got = x.getImageData(0, 0, c.width, c.height).data;
+          const r = document.createElement('canvas'); r.width = v.width; r.height = v.height;
+          const y = r.getContext('2d'); y.drawImage(window.__picCanvas, 0, 0, r.width, r.height);
+          const want = y.getImageData(0, 0, r.width, r.height).data;
+          let off = 0;
+          for (let i = 0; i < got.length; i += 4) if (Math.abs(got[i] - want[i]) > 140 && Math.abs(got[i + 2] - want[i + 2]) > 140) off++;
+          return off / (got.length / 4);
+        });
+      // sweep across it, quickly, left to right
+      await p.mouse.move(40, 140);
+      await p.mouse.move(300, 140, { steps: 8 });
+      await sleep(60);
+      check(tag('distort: moving over it draws'), (await view()) === 'block');
+      const moved = await apart();
+      check(tag('distort: the drawn frame is the picture pushed about, not the picture'), moved > 0.01, `${(moved * 100).toFixed(1)}% of the pixels moved`);
+      await p.mouse.move(800, 700);
+      await sleep(2500);
+      check(tag('distort: it settles back, and the picture shows itself again'), (await view()) === 'none');
+      const g0 = await p.evaluate(() => window.__frames);
+      await sleep(500);
+      const g1 = await p.evaluate(() => window.__frames);
+      check(tag('distort: settled, the loop rests'), g1 - g0 <= 3, `${g1 - g0} frames in 0.5s`);
+      const after = await p.evaluate(() => {
+        window.sw.stop();
+        return document.querySelectorAll('canvas.ux-motion-fx').length;
+      });
+      check(tag('distort: stop() removes its view'), after === 0);
+    }
+    check(tag('no errors (distort)'), errors.length === 0, errors.join(' | '));
+    await ctx.close();
+  }
+
+  // ── distort under reduced motion: the picture as it is, nothing moves ──
+  {
+    const fxScript = '<script src="/scrollwork.min.js"></script><script src="/scrollwork-fx.min.js"></script>';
+    const { p, ctx, errors } = await page(browser, `<div id="a" style="width:200px;height:100px;background:#246 url(data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==) center / cover" data-scrollwork='{"fx":[{"type":"distort","on":"appear"}]}'></div>`, { reduced: true, script: fxScript });
+    await p.evaluate(() => (window.sw = window.Scrollwork.auto(document.body, { plugins: [window.ScrollworkFx.fx] })));
+    await p.mouse.move(10, 10);
+    await p.mouse.move(150, 60, { steps: 6 });
+    await sleep(400);
+    const shown = await p.evaluate(() => Array.from(document.querySelectorAll('canvas.ux-motion-fx')).filter((v) => getComputedStyle(v).display !== 'none').length);
+    check(tag('distort: reduced motion shows the picture as it is'), shown === 0 && errors.length === 0, `${shown} drawn, ${errors.join(' | ')}`);
+    await ctx.close();
+  }
+
   // ── roll: each digit is a wheel that lands on its value; the words stay the words (1.9.0) ──
   {
     const { p, ctx, errors } = await page(browser, `<div style="height:20px"></div><p id="n" style="font:48px/1.1 sans-serif" data-scrollwork='{"text":true,"appear":{"effect":"roll","duration":0.6,"stagger":0.05,"offset":0}}'>$1M-2M 500+</p><div style="height:1500px"></div>`, { counting: true });

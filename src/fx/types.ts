@@ -51,7 +51,25 @@ export interface DitherFx extends FxBase {
   trail: number;
 }
 
-export type Fx = GlitchFx | DitherFx;
+/**
+ * Pixel distortion (after Codrops' Distorted Pixels, MIT): the picture is cut
+ * into a grid of cells, and the pointer moving over it pushes the cells near
+ * it along its own direction; each cell then eases back to its place. Big
+ * cells read as blocks (grid 50), many small ones as a liquid smear (grid 607).
+ */
+export interface DistortFx extends FxBase {
+  type: 'distort';
+  /** cells across the picture, and down: 2 to 1000 */
+  grid: number;
+  /** the pointer's reach, as a fraction of the grid, 0 to 1 */
+  mouse: number;
+  /** how far a push moves the cells, 0 to 1 (times intensity) */
+  strength: number;
+  /** what each cell keeps of its offset every frame (at 60 per second): 0.9 settles fast, 0.96 slowly */
+  relaxation: number;
+}
+
+export type Fx = GlitchFx | DitherFx | DistortFx;
 export type FxType = Fx['type'];
 
 /** The picture an effect reads: the host's own, found at mount */
