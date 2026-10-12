@@ -125,6 +125,36 @@ follows with no lag.
 | `blend` | `"normal"` | `difference` keeps it visible over any colour |
 | `links` | none | a state it moves to over a link, a button or a field, eased over 0.25 s: `{"scale": 2.5}` |
 
+## rollover
+
+A button's hover effect, played while the pointer is on the control (the
+nearest link or button around the element, or `trigger`) or it has keyboard
+focus, and back when it leaves. CSS transitions, so leaving halfway reverses
+from where it is. One effect as an object, or a list with one of each.
+
+```html
+<a href="/start"><span data-scrollwork='{"rollover": {"effect": "roll"}}'>Get started</span></a>
+<button data-scrollwork='{"rollover": {"effect": "wipe", "color": "#A6F4C5", "ink": "#000"}}'>Contact</button>
+<button data-scrollwork='{"rollover": [{"effect": "roll"}, {"effect": "wipe", "color": "#FF6B02"}]}'>Get started</button>
+```
+
+| Field | Default | |
+|---|---|---|
+| `effect` | `"roll"` | `roll`: the letters move out of a one-line window one after another as a copy moves in. `wipe`: a colour sweeps across the element. |
+| `direction` | roll `"up"`, wipe `"right"` | roll: `up` or `down`. wipe: the way the colour travels, `right` (from the left edge), `left`, `up` (from the bottom), `down`, or `center` (outward). |
+| `duration` | roll `0.2`, wipe `0.8` | seconds a letter, or the wipe, takes (0 to 5) |
+| `stagger` | `0.02` | roll: seconds between letters (0 to 0.5) |
+| `ease` | roll `"ease-in-out-quad"`, wipe `"out"` | a curve by name (see Curves); Elastic and Bounce ease out instead |
+| `color` | (required for a wipe) | the colour that sweeps across, a layer above the element's own background |
+| `ink` | none | wipe: the colour its words and icons take |
+| `trigger` | the nearest link or button | the id of the element whose hover plays it |
+
+A roll is for one line of text: the element's words, split into letters, in
+a window as tall as the line, its own children set aside and given back on
+stop. A screen reader hears the words once. Text an `appear` already splits is
+not rolled. Under reduced motion the letters stay and a wipe's colours change
+at once; a tap on a touch screen plays neither.
+
 ## hover and press
 
 `{ "hover": { "scale": 1.04 } }` and `{ "press": { "scale": 0.96 } }` are

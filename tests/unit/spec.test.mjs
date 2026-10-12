@@ -231,3 +231,27 @@ test('loader: true takes the defaults, fields are clamped; flipbook is a loop fi
   assert.equal(s.items[2].loop.flipbook, 0.5);
   assert.equal(s.items[3].loop.flipbook, 0);
 });
+
+test('a rollover: a roll and a wipe filled in with their own defaults', () => {
+  const { value } = said(() => readSpec({ items: [{ id: 'a', rollover: { effect: 'roll' } }, { id: 'b', rollover: { effect: 'wipe', color: '#A6F4C5', ink: '#000' } }] }));
+  assert.deepEqual(value.items[0].rollover, [{ effect: 'roll', direction: 'up', duration: 0.2, stagger: 0.02, ease: 'ease-in-out-quad' }]);
+  assert.deepEqual(value.items[1].rollover, [{ effect: 'wipe', direction: 'right', duration: 0.8, stagger: 0, ease: 'out', color: '#A6F4C5', ink: '#000' }]);
+});
+
+test('a rollover list: a roll and a wipe on the same button, one of each', () => {
+  const { value, out } = said(() => readSpec({ items: [{ id: 'a', rollover: [{ effect: 'roll' }, { effect: 'wipe', color: '#000' }, { effect: 'roll', direction: 'down' }] }] }));
+  assert.deepEqual(value.items[0].rollover.map((r) => r.effect), ['roll', 'wipe']);
+  assert.match(out, /a second roll, left out/);
+});
+
+test('a rollover out of bounds is brought back and said: a roll does not go sideways, a wipe needs a colour', () => {
+  const { value, out } = said(() => readSpec({ items: [{ id: 'a', rollover: { effect: 'roll', direction: 'left', duration: 9, stagger: 2 } }, { id: 'b', rollover: { effect: 'wipe' } }, { id: 'c', rollover: 'yes' }] }));
+  assert.equal(value.items[0].rollover[0].direction, 'up');
+  assert.equal(value.items[0].rollover[0].duration, 5);
+  assert.equal(value.items[0].rollover[0].stagger, 0.5);
+  assert.equal(value.items[1].rollover[0].color, undefined);
+  assert.equal(value.items[2].rollover, undefined);
+  assert.match(out, /rollover\.direction/);
+  assert.match(out, /rollover\.color: a wipe needs/);
+  assert.match(out, /rollover: expected an object/);
+});

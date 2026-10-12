@@ -182,6 +182,32 @@ export interface CursorMotion {
 }
 
 /**
+ * A control's hover effect, played while the pointer is on the control (or
+ * the keyboard's focus is), and back when it leaves. `roll`: the label's
+ * letters roll out one after another as a copy rolls in behind them (a text
+ * element, one line). `wipe`: a colour sweeps across the element from a side
+ * as its words take another colour. The control is the nearest link or
+ * button around the element, or `trigger`. Nothing moves under reduced
+ * motion (a wipe's colours change at once) or on a touch screen.
+ */
+export interface RolloverMotion {
+  effect: 'roll' | 'wipe';
+  /** where it moves. roll: up (out the top, the copy from below) or down; wipe: the way the colour travels (right starts at the left edge), or center, outward */
+  direction: 'up' | 'down' | 'left' | 'right' | 'center';
+  /** seconds each letter, or the wipe, takes */
+  duration: number;
+  /** roll: seconds between letters */
+  stagger: number;
+  ease: MotionEase;
+  /** wipe: the colour that sweeps across */
+  color?: string;
+  /** wipe: the words' colour once it has */
+  ink?: string;
+  /** the id of the element whose hover plays it; the nearest link or button around it when unset */
+  trigger?: string;
+}
+
+/**
  * What starts an interaction: a click, a drag, while hovering or pressing, a
  * key, the pointer entering, leaving, going down or up, or a delay after
  * start. `none` keeps the interaction and does nothing.
@@ -272,6 +298,8 @@ export interface MotionItem {
   cursor?: CursorMotion;
   /** the element covers the page as it opens and leaves after a hold; appears outside it wait */
   loader?: LoaderMotion;
+  /** hover effects: its letters roll, a colour wipes across it, or both (one of each) */
+  rollover?: RolloverMotion[];
   interactions?: Interaction[];
   /** effects played by a plugin given to `start()` (scrollwork/fx); nothing without one */
   fx?: FxSpec[];

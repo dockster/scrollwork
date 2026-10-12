@@ -974,6 +974,145 @@ for (const name of BROWSERS) {
     await ctx.close();
   }
 
+  // ── rollovers: a letter roll and a wipe on a control's hover and focus (1.12.0) ──
+  {
+    const body = `<p style="padding:40px">
+        <a id="cta" href="#x" style="display:inline-flex;padding:14px 24px;background:#fff;color:#020108;font:16px/1.2 sans-serif;text-decoration:none">
+          <span id="lbl" data-scrollwork='{"rollover":{"effect":"roll"}}'>Get started</span></a>
+        <button id="wipe" style="margin-left:40px;padding:14px 24px;border:0;border-radius:0;background-color:rgb(17, 17, 17);color:rgb(255, 255, 255);font:16px sans-serif"
+          data-scrollwork='{"rollover":{"effect":"wipe","color":"rgb(166, 244, 197)","ink":"rgb(0, 0, 0)"}}'>Contact</button>
+        <button id="up" style="margin-left:40px;padding:14px 24px;border:0;background:#111;color:#fff"
+          data-scrollwork='{"rollover":{"effect":"wipe","color":"#ff6b02","direction":"up"}}'>Up</button>
+        <button id="both" style="margin-left:40px;padding:14px 24px;border:0;background:rgb(255, 255, 255);color:rgb(2, 1, 8);font:16px/1.2 sans-serif"
+          data-scrollwork='{"rollover":[{"effect":"roll"},{"effect":"wipe","color":"rgb(255, 107, 2)","duration":0.2}]}'>Get started</button>
+        <span id="bad" data-scrollwork='{"rollover":{"effect":"wipe"}}'>no colour</span>
+        <button id="painted" style="margin-left:40px;padding:14px 24px;border:0;background:#111;color:rgb(255, 255, 255)"
+          data-scrollwork='{"appear":{"effect":"fade","duration":0.1},"rollover":{"effect":"wipe","color":"#A6F4C5","ink":"rgb(0, 0, 0)","duration":0.2}}'><span>Talk to us</span></button></p>`;
+    const { p, ctx, errors, warnings } = await page(browser, body);
+    const before = await p.evaluate(() => ({ cta: document.getElementById('cta').outerHTML, wipe: document.getElementById('wipe').style.cssText }));
+    await p.evaluate(() => (window.sw = window.Scrollwork.auto()));
+    await sleep(100);
+    const letters = () =>
+      p.evaluate(() => {
+        const ty = (c) => new DOMMatrix(getComputedStyle(c).transform).f;
+        const lbl = document.getElementById('lbl');
+        const top = lbl.querySelector('.sw-roll').getBoundingClientRect().top;
+        return {
+          label: [...lbl.querySelectorAll('.sw-roll-label .sw-roll-char')].map((c) => Math.round(ty(c))),
+          copyTop: [...lbl.querySelectorAll('.sw-roll-copy .sw-roll-char')].map((c) => Math.round(c.getBoundingClientRect().top - top)),
+          h: Math.round(lbl.querySelector('.sw-roll').getBoundingClientRect().height),
+        };
+      });
+    const made = await p.evaluate(() => {
+      const lbl = document.getElementById('lbl');
+      return { chars: lbl.querySelectorAll('.sw-roll-label .sw-roll-char').length, copies: lbl.querySelectorAll('.sw-roll-copy .sw-roll-char').length, hidden: lbl.querySelector('.sw-roll').getAttribute('aria-hidden'), said: lbl.querySelector('.sw-roll-said')?.textContent };
+    });
+    check(tag('roll: the label in letters, a copy behind it, hidden from a screen reader that hears the words once'), made.chars === 10 && made.copies === 10 && made.hidden === 'true' && made.said === 'Get started', JSON.stringify(made));
+    const rest = await letters();
+    check(tag('roll: at rest the letters sit still and the copy waits below, out of the window'), rest.label.every((y) => y === 0) && rest.copyTop.every((y) => y >= rest.h - 1), JSON.stringify(rest));
+    // the pointer on the button's padding, not on the letters: the control plays it
+    const box = await p.locator('#cta').boundingBox();
+    await p.mouse.move(box.x + 6, box.y + box.height / 2);
+    await sleep(110);
+    const mid = await letters();
+    check(tag('roll: hovering the control (not the words) starts it, first letter ahead of the last'), mid.label[0] < mid.label[9] && mid.label[0] < 0, JSON.stringify(mid.label));
+    await sleep(600);
+    const over = await letters();
+    check(tag('roll: every letter goes out the top as the copy comes into the window'), over.label.every((y) => Math.abs(y + over.h) <= 1) && over.copyTop.every((y) => Math.abs(y) <= 1), JSON.stringify(over));
+    await p.mouse.move(5, 5);
+    await sleep(700);
+    const back = await letters();
+    check(tag('roll: leaving puts them back'), back.label.every((y) => y === 0), JSON.stringify(back.label));
+    // the keyboard: focus shows it as hover does
+    // a key, then the focus on the link: keyboard focus (:focus-visible) in all three. Not Tab itself:
+    // WebKit leaves links out of the Tab order (macOS's own setting, Option-Tab reaches them)
+    await p.keyboard.press('Shift');
+    await p.evaluate(() => document.getElementById('cta').focus());
+    await sleep(700);
+    const focused = await letters();
+    check(tag('roll: keyboard focus plays it'), focused.label.every((y) => y < 0), JSON.stringify(focused.label));
+    await p.evaluate(() => document.getElementById('cta').blur());
+    await sleep(700);
+    check(tag('roll: and moving the focus on puts it back'), (await letters()).label.every((y) => y === 0));
+    // that Tab reached the wipe's button and, rightly, played it: the focus leaves before the wipe's own checks
+    await p.evaluate(() => document.activeElement && document.activeElement.blur());
+    await sleep(1000);
+
+    // the wipe
+    const w = () => p.evaluate(() => { const b = document.getElementById('wipe'); const cs = getComputedStyle(b); return { size: cs.backgroundSize.split(',')[0].trim(), pos: cs.backgroundPosition.split(',')[0].trim(), color: cs.color, fill: cs.backgroundColor }; });
+    const w0 = await w();
+    check(tag('wipe: at rest the colour is a sliver at the left, the button its own colour'), w0.size === '0% 100%' && /^0%|^left/.test(w0.pos) && w0.color === 'rgb(255, 255, 255)' && w0.fill === 'rgb(17, 17, 17)', JSON.stringify(w0));
+    const wb = await p.locator('#wipe').boundingBox();
+    await p.mouse.move(wb.x + wb.width / 2, wb.y + wb.height / 2);
+    await sleep(250);
+    const w1 = await w();
+    await sleep(900);
+    const w2 = await w();
+    check(tag('wipe: hovered, the colour grows across from the left as the words turn black'), parseFloat(w1.size) > 0 && parseFloat(w1.size) < 100 && w2.size === '100% 100%' && w2.color === 'rgb(0, 0, 0)' && w2.fill === 'rgb(17, 17, 17)', JSON.stringify({ w1, w2 }));
+    await p.mouse.move(5, 5);
+    await sleep(1000);
+    const w3 = await w();
+    check(tag('wipe: leaving takes it back'), w3.size === '0% 100%' && w3.color === 'rgb(255, 255, 255)', JSON.stringify(w3));
+    const up = await p.evaluate(() => { const cs = getComputedStyle(document.getElementById('up')); return { size: cs.backgroundSize, pos: cs.backgroundPosition }; });
+    check(tag('wipe up: it rises from the bottom edge'), up.size === '100% 0%' && /50% 100%|center bottom/.test(up.pos), JSON.stringify(up));
+    // both on one button (a uxdeck button holds its own words): the letters roll as the fill wipes
+    const bb = await p.locator('#both').boundingBox();
+    await p.mouse.move(bb.x + bb.width / 2, bb.y + bb.height / 2);
+    await sleep(800);
+    const both = await p.evaluate(() => { const b = document.getElementById('both'); return { rolled: [...b.querySelectorAll('.sw-roll-label .sw-roll-char')].every((c) => new DOMMatrix(getComputedStyle(c).transform).f < 0), size: getComputedStyle(b).backgroundSize.split(',')[0].trim() }; });
+    check(tag('roll and wipe on one button: both play'), both.rolled && both.size === '100% 100%', JSON.stringify(both));
+    await p.mouse.move(5, 5);
+    await sleep(800);
+    // the engine paints this button (an appear) and writes its inline colour as it does: the words still darken
+    const pb2 = await p.locator('#painted').boundingBox();
+    await p.mouse.move(pb2.x + pb2.width / 2, pb2.y + pb2.height / 2);
+    await sleep(500);
+    const painted = await p.evaluate(() => ({ own: getComputedStyle(document.getElementById('painted')).color, inner: getComputedStyle(document.querySelector('#painted span')).color }));
+    const paintedSize = await p.evaluate(() => getComputedStyle(document.getElementById('painted')).backgroundSize.split(',')[0].trim() + ' ' + getComputedStyle(document.getElementById('painted')).backgroundImage.slice(0, 30));
+    check(tag('wipe: on a button the engine also paints, the colour still sweeps and the words darken (inside too)'), painted.own === 'rgb(0, 0, 0)' && painted.inner === 'rgb(0, 0, 0)' && /^100% 100% linear-gradient/.test(paintedSize), JSON.stringify(painted) + ' ' + paintedSize);
+    await p.mouse.move(5, 5);
+    await sleep(500);
+    check(tag('wipe with no colour: says so, and does nothing'), warnings.some((m) => /rollover\.color/.test(m)), warnings.join(' | ').slice(0, 200));
+
+    await p.evaluate(() => window.sw.stop());
+    const after = await p.evaluate(() => ({ cta: document.getElementById('cta').outerHTML, wipe: document.getElementById('wipe').style.cssText }));
+    check(tag('rollover: stop() gives the label and the button back as they were'), after.cta === before.cta && after.wipe === before.wipe, JSON.stringify({ before: before.wipe, after: after.wipe }));
+    check(tag('no errors (rollover)'), errors.length === 0, errors.join(' | '));
+    await ctx.close();
+
+    // reduced motion: the letters never move; a wipe's colours change at once
+    const r = await page(browser, body, { reduced: true });
+    await r.p.evaluate(() => window.Scrollwork.auto());
+    await sleep(100);
+    const rb = await r.p.locator('#cta').boundingBox();
+    await r.p.mouse.move(rb.x + 6, rb.y + rb.height / 2);
+    await sleep(400);
+    const still = await r.p.evaluate(() => [...document.querySelectorAll('#lbl .sw-roll-label .sw-roll-char')].every((c) => new DOMMatrix(getComputedStyle(c).transform).f === 0));
+    const rw = await r.p.locator('#wipe').boundingBox();
+    await r.p.mouse.move(rw.x + rw.width / 2, rw.y + rw.height / 2);
+    await sleep(40);
+    const at = await r.p.evaluate(() => getComputedStyle(document.getElementById('wipe')).backgroundSize.split(',')[0].trim());
+    check(tag('reduced motion: the letters stay, the wipe is there at once'), still && at === '100% 100%', JSON.stringify({ still, at }));
+    await r.ctx.close();
+
+    // a tap on a touch screen does not leave it hovered
+    const tctx = await browser.newContext({ viewport: { width: 1000, height: 700 }, hasTouch: true });
+    const tp = await tctx.newPage();
+    await tp.route(`${ORIGIN}/**`, (route) => {
+      const path = new URL(route.request().url()).pathname;
+      if (path === '/') return route.fulfill({ contentType: 'text/html', body: `<!doctype html><html><head><meta charset="utf-8"></head><body>${body}<script src="/scrollwork.min.js"></script></body></html>` });
+      return route.fulfill({ contentType: 'text/javascript', body: DIST(path.slice(1)) });
+    });
+    await tp.goto(`${ORIGIN}/`);
+    await tp.evaluate(() => window.Scrollwork.auto());
+    await sleep(100);
+    await tp.tap('#wipe');
+    await sleep(1000);
+    const tapped = await tp.evaluate(() => getComputedStyle(document.getElementById('wipe')).backgroundSize.split(',')[0].trim());
+    check(tag('touch: a tap does not play the wipe'), tapped === '0% 100%', tapped);
+    await tctx.close();
+  }
+
   await browser.close();
 }
 

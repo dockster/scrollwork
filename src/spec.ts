@@ -6,7 +6,7 @@
 import { SPEC_VERSION } from './types.js';
 import { EASINGS } from './easing.js';
 import { resolveVars } from './vars.js';
-import type { AppearMotion, FxSpec, LoopMotion, Interaction, InteractionAnimation, MotionEase, MotionItem, MotionKey, MotionSpec, MotionState, PinMotion, ScrollMotion, CursorMotion, LoaderMotion } from './types.js';
+import type { AppearMotion, FxSpec, LoopMotion, Interaction, InteractionAnimation, MotionEase, MotionItem, MotionKey, MotionSpec, MotionState, PinMotion, ScrollMotion, CursorMotion, LoaderMotion, RolloverMotion } from './types.js';
 
 export const EASES: readonly MotionEase[] = ['smooth', 'out', 'in-out', 'expo', 'back', 'linear', 'in', 'in-back', 'in-out-back', ...EASINGS];
 const EFFECTS = ['fade', 'slide-up', 'mask', 'blur', 'scale', 'custom', 'roll'] as const;
@@ -286,6 +286,36 @@ export function readInteraction(v: unknown, notes: Notes, what: string, i: numbe
 }
 
 /** One item, filled in and checked. */
+export const ROLLOVER_DEFAULTS = {
+  roll: { direction: 'up', duration: 0.2, stagger: 0.02, ease: 'ease-in-out-quad' },
+  wipe: { direction: 'right', duration: 0.8, stagger: 0, ease: 'out' },
+} as const;
+
+export function readRollover(v: unknown, notes: Notes, what: string): RolloverMotion | undefined {
+  if (v === undefined || v === false) return undefined;
+  if (!isObj(v)) {
+    notes.add(`${what}: expected an object like {"effect": "roll"} or {"effect": "wipe", "color": "#A6F4C5"}`);
+    return undefined;
+  }
+  const effect = oneOf(v.effect, ['roll', 'wipe'] as const, 'roll', notes, what + '.effect');
+  const d = ROLLOVER_DEFAULTS[effect];
+  const dirs = effect === 'roll' ? (['up', 'down'] as const) : (['left', 'right', 'up', 'down', 'center'] as const);
+  const out: RolloverMotion = {
+    effect,
+    direction: oneOf(v.direction, dirs as readonly RolloverMotion['direction'][], d.direction, notes, what + '.direction'),
+    duration: num(v.duration, d.duration, notes, what + '.duration', 0, 5),
+    stagger: effect === 'roll' ? num(v.stagger, d.stagger, notes, what + '.stagger', 0, 0.5) : 0,
+    ease: oneOf(v.ease, EASES, d.ease as MotionEase, notes, what + '.ease'),
+  };
+  if (effect === 'wipe') {
+    if (typeof v.color === 'string' && v.color.trim()) out.color = v.color.trim();
+    else notes.add(`${what}.color: a wipe needs the colour that sweeps across`);
+    if (typeof v.ink === 'string' && v.ink.trim()) out.ink = v.ink.trim();
+  }
+  if (typeof v.trigger === 'string' && v.trigger) out.trigger = v.trigger;
+  return out;
+}
+
 export function readItem(v: unknown, notes: Notes, i: number): MotionItem | null {
   const what = `items[${i}]`;
   if (!isObj(v)) {
@@ -309,6 +339,18 @@ export function readItem(v: unknown, notes: Notes, i: number): MotionItem | null
   if (c) item.cursor = c;
   const ld = readLoader(v.loader, notes, `${what}.loader`);
   if (ld) item.loader = ld;
+  // one effect, or a list of them (a roll and a wipe on the same button); one of each kind
+  if (v.rollover !== undefined && v.rollover !== false) {
+    const list = Array.isArray(v.rollover) ? v.rollover : [v.rollover];
+    const ros: RolloverMotion[] = [];
+    list.forEach((r, n) => {
+      const ro = readRollover(r, notes, Array.isArray(v.rollover) ? `${what}.rollover[${n}]` : `${what}.rollover`);
+      if (!ro) return;
+      if (ros.some((x) => x.effect === ro.effect)) notes.add(`${what}.rollover: a second ${ro.effect}, left out (one of each)`);
+      else ros.push(ro);
+    });
+    if (ros.length) item.rollover = ros;
+  }
   if (v.interactions !== undefined) {
     if (!Array.isArray(v.interactions)) notes.add(`${what}.interactions: expected a list`);
     else {

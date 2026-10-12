@@ -4,7 +4,7 @@ Scroll, appear, pin and interaction motion for the web. Describe it in HTML
 with a `data-scrollwork` attribute, or in code with `animate()`, `inView()`
 and `scroll()`.
 
-- **About 20 KB gzipped, no dependencies.** One file for a `<script>` tag, or
+- **About 22 KB gzipped, no dependencies.** One file for a `<script>` tag, or
   an ES module for your bundler, with TypeScript types. WebGL effects are a
   separate, optional file (`scrollwork/fx`, about 8 KB).
 - **Declarative first.** Text that rises line by line, parallax, pinned
@@ -112,6 +112,7 @@ defaults, is in [docs/REFERENCE.md](docs/REFERENCE.md).
 | `cursor` | The element follows the pointer as the page's cursor, with a `lag`, a `links` state over links, the page's own cursor hidden. |
 | `loader` | The element covers the page as it opens, plays what appears inside it, holds, then leaves; every other appear waits for it. The root carries `data-sw-loading` while it is up. |
 | `hover`, `press` | A state to move to while hovered (or focused by keyboard) or pressed. |
+| `rollover` | A button's hover effect: `roll` sends the label's letters out one after another as a copy rolls in (`direction` up or down, `stagger`), `wipe` sweeps a `color` across it from a side or the centre while its words take an `ink`. Played by the nearest link or button around it, or by keyboard focus; one of each, as a list, on the same element. |
 | `interactions` | The full list: click, key, delay, a video ending and more, changing state, scrolling to an element, or calling your own `custom` action. |
 
 A **state** is `{ x, y, scale, rotate, opacity, blur }`, in px, a multiple,
@@ -199,7 +200,11 @@ cloud or the element's picture, with a pointer trail). More follow.
   to Enter and Space. A key trigger never takes Enter or Space from a focused
   button or link, and ignores shortcuts made with a modifier key.
 - **Screen readers.** Split text hides its pieces and is read once, whole. Text
-  that contains a link or a button is left readable as it is.
+  that contains a link or a button is left readable as it is. A rolling label
+  is read once, without its copy.
+- **Rollovers.** Played by keyboard focus as by hover, never by a tap on a
+  touch screen. Under reduced motion the letters stay and a wipe's colours
+  change at once.
 - **Scrolling.** Smooth scrolling leaves the wheel to any box under the pointer
   that can still scroll: a modal, a code block, a carousel.
 

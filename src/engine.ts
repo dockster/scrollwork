@@ -9,7 +9,8 @@
 // back exactly as it was.
 
 import { bezier, clamp01, EASES, spring } from './easing.js';
-import { combine, degrees, identity, mix, NONE, paint, parseColour, putInline, BLANK, readBase, release, type Base, type State } from './style.js';
+import { mountRollover } from './rollover.js';
+import { SR_ONLY, combine, degrees, identity, mix, NONE, paint, parseColour, putInline, BLANK, readBase, release, type Base, type State } from './style.js';
 import type { AppearMotion, Interaction, InteractionAnimation, MotionControl, MotionItem, MotionKey, MotionOptions, MotionSpec, MotionState, PluginHandle, Signals } from './types.js';
 
 export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionControl {
@@ -225,7 +226,7 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
       copy.className = 'ux-motion-said';
       copy.textContent = said;
       // visually hidden, the usual way: there for assistive technology only
-      copy.style.cssText = 'position:absolute;width:1px;height:1px;margin:-1px;padding:0;border:0;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap';
+      copy.style.cssText = SR_ONLY;
       el.appendChild(copy);
       restores.push(() => copy.remove());
     }
@@ -1224,6 +1225,23 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
     unlisten.push(() => el.removeEventListener(type, fn, capture));
   };
   listenCursor();
+  // rollovers: a control's hover effect, drawn by CSS transitions (rollover.ts); none in seek mode, which has no pointer
+  if (!opts.seekOnly) {
+    const ctx = { reduced: () => reduced, on: (t: EventTarget, type: string, fn: (ev: Event) => void) => on(t, type, fn), restore: (fn: () => void) => restores.push(fn), find: (id: string) => find(id) };
+    for (const e of entries) {
+      let mounted = false;
+      for (const r of e.item.rollover || []) {
+        // letters an appear already split are its own: a roll would split them again
+        if (r.effect === 'roll' && (e.units.length > 0 || !opts.split)) continue;
+        mountRollover(e.el, r, ctx);
+        mounted = true;
+      }
+      // The element at rest now includes what its rollover added (a wipe's colour layer): painting
+      // puts back the resting inline values, and read before, it took the wipe away on every frame.
+      // stop() gives back these values first, then the rollover takes its own away.
+      if (mounted) e.base = readBase(e.el);
+    }
+  }
   const timers = new Set<number>();
   const later = (seconds: number, fn: () => void) => {
     // reduced motion takes away movement, not time: a "after 2 s" still waits

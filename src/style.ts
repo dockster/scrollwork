@@ -155,6 +155,9 @@ export interface Base {
   inline: Inline;
 }
 
+/** visually hidden, the usual way: there for assistive technology only */
+export const SR_ONLY = 'position:absolute;width:1px;height:1px;margin:-1px;padding:0;border:0;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap';
+
 export const BLANK: Inline = { translate: '', scale: '', rotate: '', transform: '', opacity: '', filter: '', clipPath: '', backgroundColor: '', color: '', backgroundImage: '', src: '' };
 /** an element of Scrollwork's own making (split text): nothing of the author's to keep */
 export const NONE: Base = { t: [], s: [], rot: 0, opacity: 1, filter: '', bg: [0, 0, 0, 0], ink: [0, 0, 0, 1], inline: BLANK };

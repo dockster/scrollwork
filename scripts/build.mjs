@@ -23,8 +23,10 @@ execFileSync('npx', ['tsc', '-p', 'tsconfig.json'], { stdio: 'inherit' });
 
 /** KB gzipped each minified file may reach; the README says these numbers */
 // 1.11 (loop fade and upright, 3D states, the cursor) and 1.12 (the loader,
-// flipbook) are budgeted at 21 KB together (docs/FOURMULA-EFFECTS-PLAN.md in uxdeck)
-const BUDGET = { 'scrollwork.min.js': 21, 'scrollwork-fx.min.js': 8 };
+// flipbook) are budgeted at 21 KB together (docs/FOURMULA-EFFECTS-PLAN.md in uxdeck);
+// 1.12's rollovers (letter roll, wipe, with a screen reader's copy and keyboard focus) take it to 22.0
+// (docs/LETTER-ROLL-PLAN.md in uxdeck); the budget allows half a KB over, rather than trimming working code for bytes
+const BUDGET = { 'scrollwork.min.js': 22.5, 'scrollwork-fx.min.js': 8 };
 let over = '';
 for (const f of ['scrollwork.mjs', 'scrollwork.js', 'scrollwork.min.js', 'fx.mjs', 'scrollwork-fx.js', 'scrollwork-fx.min.js']) {
   const b = readFileSync(`dist/${f}`);

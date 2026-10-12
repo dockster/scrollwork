@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.12.0 (2026-10-11)
+
+- `rollover`: a button's hover effect, drawn by CSS transitions so it reverses
+  from wherever it is when the pointer leaves.
+  - `roll`: the label's letters move up (or down) one after another, out of a
+    one-line window, as a copy of the label moves in behind them; back the
+    other way, the last letter first. 0.2 s a letter, 0.02 s apart, on
+    `ease-in-out-quad` by default.
+  - `wipe`: a `color` grows across the element from a side (`direction`
+    right, left, up, down) or out from the `center`, as a background layer
+    above its own; its words (and icons) take `ink`. 0.8 s on `out` by default.
+  - Played by the nearest link or button around the element (or `trigger`),
+    and by keyboard focus; not by a tap on a touch screen. Under reduced
+    motion the letters stay and a wipe's colours change at once. A roll and a
+    wipe can share an element (`rollover` takes a list, one of each).
+  - A rolling label is read once by a screen reader. `stop()` gives the
+    element back as it was.
+- The minified file is 22.0 KB gzipped (the budget allows 22.5).
+
 ## 1.11.1 (2026-10-10)
 
 - A `loader` on the page covers the whole window. It kept the width and
