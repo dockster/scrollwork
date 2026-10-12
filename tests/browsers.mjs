@@ -876,6 +876,88 @@ for (const name of BROWSERS) {
     await ctx.close();
   }
 
+  // ── distort with no pointer moving it: the sweep (1.13.1). Always and scroll move on their own;
+  //    a hover host reached by the keyboard (or played by a host app) moves too; a picture with
+  //    words laid over it still follows the pointer across them ──
+  {
+    const fxScript = '<script src="/scrollwork.min.js"></script><script src="/scrollwork-fx.min.js"></script>';
+    const picture = `<script>(() => { const c = document.createElement('canvas'); c.width = 60; c.height = 40; const x = c.getContext('2d'); for (let i = 0; i < 6; i++) { x.fillStyle = i % 2 ? '#1030f0' : '#f01030'; x.fillRect(i * 10, 0, 10, 40); } window.__pic = c.toDataURL(); window.__picCanvas = c; })();</script>`;
+    const box = 'width:300px;height:200px;background:url() center / cover';
+    const body = `<div id="al" style="${box}" data-scrollwork='{"fx":[{"type":"distort","on":"always","grid":20,"mouse":0.4,"strength":0.6}]}'></div>
+      <div id="fo" tabindex="0" style="${box};margin-top:20px" data-scrollwork='{"fx":[{"type":"distort","in":0.01,"grid":20,"mouse":0.4,"strength":0.6}]}'></div>
+      <div style="position:relative;width:300px;margin:20px 0 0 340px"><div id="cv" style="${box}" data-scrollwork='{"fx":[{"type":"distort","in":0.01,"grid":20,"mouse":0.4,"strength":0.6}]}'></div><p style="position:absolute;inset:0;margin:0">words over the picture</p></div>
+      <div id="sc" style="${box};margin-top:20px" data-scrollwork='{"fx":[{"type":"distort","on":"scroll","grid":20,"mouse":0.4,"strength":0.6}]}'></div><div style="height:2400px"></div>`;
+    const { p, ctx, errors } = await page(browser, picture + body, { counting: true, script: fxScript });
+    const able = await p.evaluate(() => {
+      for (const id of ['al', 'fo', 'cv', 'sc']) document.getElementById(id).style.backgroundImage = `url(${window.__pic})`;
+      const can = typeof OffscreenCanvas !== 'undefined' && !!new OffscreenCanvas(1, 1).getContext('webgl2') && !!document.createElement('canvas').getContext('bitmaprenderer');
+      window.sw = window.Scrollwork.auto(document.body, { plugins: [window.ScrollworkFx.fx] });
+      return can;
+    });
+    if (!able) {
+      check(tag('distort sweep: no WebGL2 here, the page plays without it'), errors.length === 0, errors.join(' | '));
+    } else {
+      const view = (id) => p.evaluate((id) => getComputedStyle(document.querySelector(`#${id} > canvas.ux-motion-fx`)).display, id);
+      // the share of the drawn frame that is clearly the other stripe's colour
+      const apart = (id) =>
+        p.evaluate((id) => {
+          const v = document.querySelector(`#${id} > canvas.ux-motion-fx`);
+          const c = document.createElement('canvas'); c.width = v.width; c.height = v.height;
+          const x = c.getContext('2d'); x.drawImage(v, 0, 0);
+          const got = x.getImageData(0, 0, c.width, c.height).data;
+          const r = document.createElement('canvas'); r.width = v.width; r.height = v.height;
+          const y = r.getContext('2d'); y.drawImage(window.__picCanvas, 0, 0, r.width, r.height);
+          const want = y.getImageData(0, 0, r.width, r.height).data;
+          let off = 0;
+          for (let i = 0; i < got.length; i += 4) if (Math.abs(got[i] - want[i]) > 140 && Math.abs(got[i + 2] - want[i + 2]) > 140) off++;
+          return off / (got.length / 4);
+        }, id);
+      await sleep(900);
+      check(tag('distort sweep: always, with no pointer at all, draws the picture pushed about'), (await view('al')) === 'block' && (await apart('al')) > 0.01, `${((await apart('al')) * 100).toFixed(1)}% moved`);
+      const f0 = await p.evaluate(() => window.__frames);
+      await sleep(400);
+      const f1 = await p.evaluate(() => window.__frames);
+      check(tag('distort sweep: always keeps the loop awake'), f1 - f0 > 8, `${f1 - f0} frames in 0.4s`);
+      // the pointer arriving and resting there (a click on a host app's play button over the picture) is not a move
+      await p.mouse.move(150, 100);
+      await sleep(400);
+      check(tag('distort sweep: a pointer arriving without moving leaves the sweep going'), (await view('al')) === 'block', await view('al'));
+      await p.mouse.move(900, 650);
+      check(tag('distort sweep: a hover one with no pointer rests, the picture shows itself'), (await view('fo')) === 'none' && (await view('cv')) === 'none');
+      await p.evaluate(() => document.getElementById('fo').focus());
+      await sleep(600);
+      check(tag('distort sweep: reached by the keyboard, it moves on its own'), (await view('fo')) === 'block' && (await apart('fo')) > 0.01, `${((await apart('fo')) * 100).toFixed(1)}% moved`);
+      await p.evaluate(() => document.getElementById('fo').blur());
+      await sleep(2500);
+      check(tag('distort sweep: let go, it settles back and hides'), (await view('fo')) === 'none');
+      // across the words laid over the picture: the words take the events, the picture still follows
+      const b = await p.evaluate(() => { const r = document.getElementById('cv').getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; });
+      await p.mouse.move(b.x + 10, b.y + b.h / 2);
+      await p.mouse.move(b.x + b.w - 10, b.y + b.h / 2, { steps: 8 });
+      await sleep(60);
+      check(tag('distort sweep: under words laid over it, the pointer still pushes the cells'), (await view('cv')) === 'block', await view('cv'));
+      await p.mouse.move(b.x + b.w / 2, b.y + b.h / 2);
+      await sleep(2500);
+      check(tag('distort sweep: a pointer resting over a hover one leaves it still (no sweep under a real pointer)'), (await view('cv')) === 'none', await view('cv'));
+      // scroll: still at rest, moving while the page scrolls fast
+      check(tag('distort sweep: on scroll, at rest it shows the picture'), (await view('sc')) === 'none');
+      const during = await p.evaluate(async () => {
+        let shown = 0;
+        for (let i = 0; i < 24; i++) {
+          window.scrollBy(0, i < 12 ? 40 : -40);
+          await new Promise((r) => requestAnimationFrame(r));
+          const v = document.querySelector('#sc > canvas.ux-motion-fx');
+          if (getComputedStyle(v).display === 'block') shown++;
+        }
+        return shown;
+      });
+      check(tag('distort sweep: on scroll, the scroll speed moves it'), during > 0, `${during} of 24 frames drawn`);
+      await p.evaluate(() => window.sw.stop());
+    }
+    check(tag('no errors (distort sweep)'), errors.length === 0, errors.join(' | '));
+    await ctx.close();
+  }
+
   // ── distort under reduced motion: the picture as it is, nothing moves ──
   {
     const fxScript = '<script src="/scrollwork.min.js"></script><script src="/scrollwork-fx.min.js"></script>';

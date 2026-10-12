@@ -344,7 +344,7 @@ draws; it stops drawing once every cell is back.
 
 | Field | Default | |
 |---|---|---|
-| `on` | `"hover"` | how hard the pointer pushes: `hover` while it is over the element; `appear` also opens scrambled, each cell pushed at random (from `seed`), and settles as the element comes into view |
+| `on` | `"hover"` | what pushes the cells: `hover`, the pointer while it is over the element (or the sweep while it has keyboard focus); `appear` also opens scrambled, each cell pushed at random (from `seed`), and settles as the element comes into view; `always`, the sweep all the time; `scroll`, the sweep as hard as the page scrolls fast |
 | `intensity` | `1` | multiplies `strength` |
 | `speed` | `1` | runs its settling faster or slower |
 | `grid` | `50` | cells across and down, 2 to 1000, whole |
@@ -353,11 +353,39 @@ draws; it stops drawing once every cell is back.
 | `relaxation` | `0.9` | what a cell keeps of its offset each frame (at 60 a second), 0 to 0.999: 0.9 settles in about half a second, 0.96 lingers |
 | `in`, `out` | `0.2`, `0.6` | seconds for the hover to come in and go out |
 
-Codrops' two demos: `{"grid": 50, "mouse": 0.25, "strength": 0.11}` (the
-defaults) and `{"grid": 607, "mouse": 0.11, "strength": 0.36, "relaxation":
-0.96}`. A picture effect, read as `glitch` reads it (its `background-image`,
+**The sweep (1.13.1).** The cells only move when something moves over them.
+When no pointer does (on `always`, on `scroll`, or on `hover` when the element
+is hovered with no pointer over it: keyboard focus, or a host app playing it),
+a stand-in moves instead: a slow Lissajous path across the middle of the
+picture, its phase set by `seed`, at `speed`. A real pointer moving over the
+picture takes over at once, and the sweep comes back 0.6 s after its last
+move. A hover effect under a pointer that rests stays still, as in the
+original. The pointer is followed over the whole element, even under words or
+a shade laid over the picture.
+
+Codrops' demos: `{"grid": 50, "mouse": 0.25, "strength": 0.11}` (demo 1, the
+defaults), `{"grid": 607, "mouse": 0.11, "strength": 0.36, "relaxation":
+0.96}` (demo 2) and `{"grid": 15, "mouse": 0.13, "strength": 0.15}` (demos 3
+and 4). A picture effect, read as `glitch` reads it (its `background-image`,
 with CORS). The offsets are an RG32F texture, sampled nearest, which WebGL2
 reads without an extension. Under reduced motion the picture shows as it is.
+
+### Playing an effect on demand
+
+A host app that shows an effect without a reader to hover it (a design tool's
+play button) mounts the element on its own surface with `on: "always"`:
+
+```js
+import { createSurface, readFx } from 'scrollwork/fx';
+const surface = createSurface({ win: window, wake: () => requestAnimationFrame(frame) });
+surface.add(el, readFx([{ type: 'distort', on: 'always' }], console.warn, 'demo'));
+// each frame: surface.draw(now, dt, () => signals); keep going while it returns true
+```
+
+Every effect then plays as it would with the pointer over it; a distortion
+follows the sweep. `surface.remove(el)` stops it, and the element shows its
+picture again. A host's `t0` is its clock's start: set to the frame's time each
+frame, it holds the effect on its first frame (a distortion stays at rest).
 
 ## start(spec, options)
 

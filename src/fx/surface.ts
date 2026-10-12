@@ -66,6 +66,8 @@ export interface Host {
   shown: boolean;
   /** a pixel distortion's grid, when the host has one (distort) */
   dist: Distortion | null;
+  /** the pointer is over it (tracked for a distortion, even under what covers it) */
+  inside: boolean;
   /** what to undo on stop */
   position: string | null;
   /** a field's host is isolated so its view can sit behind its children; the inline value it had */
@@ -92,7 +94,25 @@ export interface Distortion {
   prev: [number, number] | null;
   /** nothing is offset and nothing pushes: the picture shows as it is */
   settled: boolean;
+  /** when a real pointer last moved over it (performance.now()); the sweep waits a moment after */
+  real: number;
+  /** the sweep's last point and its clock, seconds; null when it did not run the frame before */
+  sweep: [number, number, number] | null;
 }
+
+/** ms after a real pointer's last move before the sweep takes over again */
+const REAL = 600;
+
+/**
+ * Where the sweep is at t seconds: a slow Lissajous path across the middle of
+ * the picture, its phase set by the seed, standing in for a pointer when none
+ * moves (on always, on scroll, and when the host is hovered or played without
+ * one), so the cells have something to follow.
+ */
+export const sweepAt = (seed: number, t: number): [number, number] => {
+  const ph = seed * 1.7;
+  return [0.5 + 0.36 * Math.sin(t * 1.9 + ph), 0.5 + 0.3 * Math.sin(t * 2.7 + ph * 0.6 + 1.3)];
+};
 
 /** offsets smaller than this are nothing (0.02 of it is under a thousandth of the picture) */
 const REST = 0.02;
@@ -120,7 +140,7 @@ const distortion = (fx: DistortFx): Distortion => {
     const rnd = seeded(fx.seed + 1);
     for (let i = 0; i < data.length; i++) data[i] = rnd() * 255 - 125;
   }
-  return { fx, size, data, tex: null, texSize: 0, vx: 0, vy: 0, prev: null, settled: fx.on !== 'appear' };
+  return { fx, size, data, tex: null, texSize: 0, vx: 0, vy: 0, prev: null, settled: fx.on !== 'appear', real: -1e9, sweep: null };
 };
 
 /**
@@ -377,15 +397,37 @@ export function createSurface(o: SurfaceOptions): Surface | null {
 
   // A field is usually drawn behind the page's words and pictures, which take
   // the pointer's events: it follows the pointer over the whole window instead.
+  // So does a distortion, whose picture often has words or a shade laid over it.
   let pointerOn = false;
   const onPointer = (ev: PointerEvent) => {
     for (const h of hosts.values()) {
-      if (!h.field || !h.visible) continue;
+      const d = h.dist;
+      if (!(h.field || d) || !h.visible) continue;
       const b = h.el.getBoundingClientRect();
       if (!b.width || !b.height) continue;
       const x = (ev.clientX - b.left) / b.width;
       const y = (ev.clientY - b.top) / b.height;
       const inside = x >= 0 && x <= 1 && y >= 0 && y <= 1;
+      if (d) {
+        // pushed by the pointer's move since its last event, in host fractions
+        if (inside) {
+          // a move, not the pointer arriving: it takes over from the sweep (a click on a host app's
+          // play button over the picture does not)
+          if (d.prev && (x !== d.prev[0] || y !== d.prev[1])) {
+            d.vx = x - d.prev[0];
+            d.vy = y - d.prev[1];
+            d.settled = false;
+            d.real = win.performance.now();
+          }
+          h.px = x;
+          h.py = y;
+          h.hoverTo = 1;
+        } else if (h.inside && !h.el.contains(doc.activeElement)) h.hoverTo = 0;
+        // leaving and coming back is not a move across the gap
+        d.prev = inside ? [x, y] : null;
+        h.inside = inside;
+      }
+      if (!h.field) continue;
       if (inside) {
         // coming back in: the trail starts where the pointer is, not where it left
         if (h.hoverTo === 0 && h.hover === 0) {
@@ -402,7 +444,12 @@ export function createSurface(o: SurfaceOptions): Surface | null {
   const onPointerOut = (ev: PointerEvent) => {
     // left the window altogether
     if (ev.relatedTarget) return;
-    for (const h of hosts.values()) if (h.field) h.hoverTo = 0;
+    for (const h of hosts.values())
+      if (h.field || h.dist) {
+        h.hoverTo = 0;
+        h.inside = false;
+        if (h.dist) h.dist.prev = null;
+      }
     wake();
   };
   const listenPointer = () => {
@@ -602,6 +649,7 @@ export function createSurface(o: SurfaceOptions): Surface | null {
         field: fx.some((f) => f.type === 'dither'),
         t0: win.performance.now(),
         dist: null,
+        inside: false,
         shown: false,
         position,
         isolation,
@@ -611,11 +659,14 @@ export function createSurface(o: SurfaceOptions): Surface | null {
         el.addEventListener(type, fn);
         h.off.push(() => el.removeEventListener(type, fn));
       };
-      const enter = () => {
+      // a real pointer over it (not focus, not an event a host app sent): a distortion waits for it to move
+      const enter = (ev: Event) => {
+        if (ev.isTrusted && ev.type === 'pointerenter') h.inside = true;
         h.hoverTo = 1;
         wake();
       };
-      const leave = () => {
+      const leave = (ev: Event) => {
+        if (ev.isTrusted && ev.type === 'pointerleave') h.inside = false;
         h.hoverTo = 0;
         wake();
       };
@@ -640,29 +691,13 @@ export function createSurface(o: SurfaceOptions): Surface | null {
         const e = ev as PointerEvent;
         const b = el.getBoundingClientRect();
         if (b.width && b.height) {
-          const x = (e.clientX - b.left) / b.width;
-          const y = (e.clientY - b.top) / b.height;
-          h.px = Math.min(1, Math.max(0, x));
-          h.py = Math.min(1, Math.max(0, y));
-          // a distortion is pushed by the pointer's move since its last event, in host fractions
-          const d = h.dist;
-          if (d) {
-            if (d.prev) {
-              d.vx = x - d.prev[0];
-              d.vy = y - d.prev[1];
-              d.settled = false;
-            }
-            d.prev = [x, y];
-          }
+          h.px = Math.min(1, Math.max(0, (e.clientX - b.left) / b.width));
+          h.py = Math.min(1, Math.max(0, (e.clientY - b.top) / b.height));
         }
         wake();
       });
-      // leaving and coming back is not a move across the gap
-      on('pointerleave', () => {
-        if (h.dist) h.dist.prev = null;
-      });
       hosts.set(el, h);
-      if (h.field) listenPointer();
+      if (h.field || h.dist) listenPointer();
       io?.observe(el);
       ro?.observe(el);
       loadPicture(h);
@@ -710,9 +745,28 @@ export function createSurface(o: SurfaceOptions): Surface | null {
         // a distortion is drawn while its grid is offset; the drive decides how hard the pointer pushes it
         const ks = h.fx.map((f) => {
           const k = drive(f, h, s);
-          if (f.type !== 'distort' || !h.dist) return k;
-          stepDistortion(h.dist, k, h.px, h.py, h.w ? h.h / h.w : 1, dt);
-          return h.dist.settled ? 0 : 1;
+          const d = h.dist;
+          if (f.type !== 'distort' || !d) return k;
+          let x = h.px;
+          let y = h.py;
+          // No pointer moving it: on always, on scroll, or hovered without one (keyboard focus, a host
+          // app's play), the sweep moves it instead; a real pointer takes over while it moves
+          if (now - d.real > REAL && (f.on === 'always' || f.on === 'scroll' || (f.on === 'hover' && h.hoverTo > 0 && !h.inside))) {
+            const t = ((now - h.t0) / 1000) * f.speed;
+            [x, y] = sweepAt(f.seed, t);
+            const was = d.sweep;
+            // a jump in its clock (a held host let go, a host back on screen) is not a move
+            // pushed twice as hard as a pointer at its pace would: a calm path that still reads at a glance
+            if (was && t >= was[2] && t - was[2] < 0.25) {
+              d.vx = (x - was[0]) * 2;
+              d.vy = (y - was[1]) * 2;
+            }
+            d.sweep = [x, y, t];
+            // its first frame has no move yet: the next one will
+            if (k > 0) moving = true;
+          } else d.sweep = null;
+          stepDistortion(d, k, x, y, h.w ? h.h / h.w : 1, dt);
+          return d.settled ? 0 : 1;
         });
         // at rest the picture itself shows: nothing to draw, nothing to keep awake
         if (ks.every((k, i) => k <= 0 && IDLE_IDENTITY[h.fx[i].type])) {

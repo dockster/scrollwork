@@ -188,7 +188,8 @@ Effects: `glitch` (blocks of the picture shift and the colours split while
 hovering), `dither` (a crisp field of bayer or halftone dots over a drifting
 cloud or the element's picture, with a pointer trail) and `distort` (the
 pointer pushes the picture's cells along its path and they ease back, after
-Codrops' Distorted Pixels). More follow.
+Codrops' Distorted Pixels; with no pointer, on `always` or `scroll`, a slow
+sweep moves them). More follow.
 
 ## Accessibility
 

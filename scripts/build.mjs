@@ -11,6 +11,30 @@ import { gzipSync } from 'node:zlib';
 const { version } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url)));
 const banner = `/*! Scrollwork ${version} | (c) 2026 uxspot.io | MIT License | https://github.com/dockster/scrollwork */`;
 rmSync('dist', { recursive: true, force: true });
+
+// The minified effects carry their shaders without comments or indentation:
+// esbuild leaves a template's text as written. Each GLSL template (a constant
+// opening on a backtick, in gl.ts and shaders/) keeps its line breaks, which
+// #version needs, and loses its // and /** */ notes and the space around them.
+const glslTrim = {
+  name: 'glsl-trim',
+  setup(b) {
+    b.onLoad({ filter: /src[\\/]fx[\\/](gl|shaders[\\/]\w+)\.ts$/ }, ({ path }) => ({
+      loader: 'ts',
+      contents: readFileSync(path, 'utf8').replace(/(export const [A-Z_]+ = `)([^`]*)`/g, (_, head, glsl) =>
+        head +
+        glsl
+          .replace(/\/\*[\s\S]*?\*\//g, '')
+          .replace(/\/\/[^\n]*/g, '')
+          .split('\n')
+          .map((l) => l.trim())
+          .filter(Boolean)
+          .join('\n') +
+        '`'
+      ),
+    }));
+  },
+};
 const common = { bundle: true, target: 'es2020', banner: { js: banner }, legalComments: 'inline', logLevel: 'warning', define: { __SCROLLWORK_VERSION__: JSON.stringify(version) } };
 
 await build({ ...common, entryPoints: ['src/index.ts'], format: 'esm', outfile: 'dist/scrollwork.mjs' });
@@ -18,7 +42,7 @@ await build({ ...common, entryPoints: ['src/global.ts'], format: 'iife', outfile
 await build({ ...common, entryPoints: ['src/global.ts'], format: 'iife', minify: true, outfile: 'dist/scrollwork.min.js' });
 await build({ ...common, entryPoints: ['src/fx/index.ts'], format: 'esm', outfile: 'dist/fx.mjs' });
 await build({ ...common, entryPoints: ['src/fx/global.ts'], format: 'iife', outfile: 'dist/scrollwork-fx.js' });
-await build({ ...common, entryPoints: ['src/fx/global.ts'], format: 'iife', minify: true, outfile: 'dist/scrollwork-fx.min.js' });
+await build({ ...common, entryPoints: ['src/fx/global.ts'], format: 'iife', minify: true, outfile: 'dist/scrollwork-fx.min.js', plugins: [glslTrim] });
 execFileSync('npx', ['tsc', '-p', 'tsconfig.json'], { stdio: 'inherit' });
 
 /** KB gzipped each minified file may reach; the README says these numbers */
@@ -27,6 +51,7 @@ execFileSync('npx', ['tsc', '-p', 'tsconfig.json'], { stdio: 'inherit' });
 // 1.12's rollovers (letter roll, wipe, with a screen reader's copy and keyboard focus) take it to 22.0
 // (docs/LETTER-ROLL-PLAN.md in uxdeck); the budget allows half a KB over, rather than trimming working code for bytes
 // the effects add-on grew to 8.9 with pixel distortion in 1.13.0 (Codrops' Distorted Pixels): 9
+// 1.13.1's sweep (distort with no pointer) took it to 9.1; the minified shaders lost their comments (glslTrim): 8.8
 const BUDGET = { 'scrollwork.min.js': 22.5, 'scrollwork-fx.min.js': 9 };
 let over = '';
 for (const f of ['scrollwork.mjs', 'scrollwork.js', 'scrollwork.min.js', 'fx.mjs', 'scrollwork-fx.js', 'scrollwork-fx.min.js']) {

@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.13.1 (2026-10-12)
+
+- scrollwork/fx `distort` moves with no pointer: a slow sweep across the
+  picture (a Lissajous path, its phase from `seed`, at `speed`) pushes the
+  cells on `always`, on `scroll` (as hard as the page scrolls fast), and on
+  `hover` when the element is hovered with no pointer over it (keyboard focus,
+  or a host app playing it on its own surface with `on: "always"`). Before,
+  `always` and `scroll` never drew, and a host app's play showed nothing. A
+  real pointer moving over the picture takes over; the sweep returns 0.6 s
+  after its last move; a pointer resting over a hover one leaves it still.
+- `distort` follows the pointer over the whole element, even under words or a
+  shade laid over the picture (they took its events before).
+- The minified shaders lose their comments and indentation: scrollwork-fx.min.js
+  is 8.8 KB gzipped (was 8.9; the budget is 9).
+
 ## 1.13.0 (2026-10-12)
 
 - scrollwork/fx `distort`: pixel distortion, after Codrops' Distorted Pixels

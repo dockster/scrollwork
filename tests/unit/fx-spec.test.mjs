@@ -91,7 +91,7 @@ test('rgbaOf reads hex, rgb() and transparent as 0 to 1', async () => {
 });
 
 // ── distort: Codrops' Distorted Pixels (MIT) ──
-const { stepDistortion } = await load('fxsurface');
+const { stepDistortion, sweepAt } = await load('fxsurface');
 
 test('a bare distort is Codrops\' demo 1: grid 50, reach 0.25, strength 0.11, relaxation 0.9, on hover', () => {
   const { note, out } = noted();
@@ -183,3 +183,35 @@ test('intensity scales the push; speed runs its clock', () => {
   stepDistortion(fast, 1, 0.5, 0.5, 1, 1000 / 60);
   assert.ok(fast.data[0] < slow.data[0]);
 });
+
+// ── the sweep: a pointer's stand-in when none moves the cells (1.13.1) ──
+test('the sweep stays over the picture, moves a little each frame, and a seed changes its path', () => {
+  let last = sweepAt(0, 0);
+  let longest = 0;
+  for (let f = 1; f < 60 * 20; f++) {
+    const [x, y] = sweepAt(0, f / 60);
+    assert.ok(x > 0.1 && x < 0.9 && y > 0.1 && y < 0.9, `${x}, ${y}`);
+    longest = Math.max(longest, Math.hypot(x - last[0], y - last[1]));
+    last = [x, y];
+  }
+  assert.ok(longest > 0.005 && longest < 0.03, `at most ${longest} of the picture a frame`);
+  assert.notDeepEqual(sweepAt(0, 1), sweepAt(7, 1));
+  assert.deepEqual(sweepAt(3, 2.5), sweepAt(3, 2.5));
+});
+
+test('driven by the sweep, the grid keeps moving and never settles; undriven, it settles', () => {
+  const d = grid({ on: 'always' });
+  let prev = sweepAt(0, 0);
+  for (let f = 1; f <= 120; f++) {
+    const at = sweepAt(0, f / 60);
+    d.vx = at[0] - prev[0];
+    d.vy = at[1] - prev[1];
+    prev = at;
+    assert.equal(stepDistortion(d, 1, at[0], at[1], 1, 1000 / 60), true, `frame ${f}`);
+  }
+  assert.ok(most(d) > 0.5, `offset ${most(d)}`);
+  let n = 0;
+  while (stepDistortion(d, 0, prev[0], prev[1], 1, 1000 / 60) && n < 2000) n++;
+  assert.equal(d.settled, true);
+});
+
