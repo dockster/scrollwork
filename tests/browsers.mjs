@@ -492,15 +492,23 @@ for (const name of BROWSERS) {
       return { rotate: getComputedStyle(document.getElementById('a')).rotate, progress: a.progress };
     });
     check(tag('repeat: Infinity, finish() shows the end state'), inf.rotate === '90deg' && inf.progress === 1, JSON.stringify(inf));
-    // chained starts keep one frame loop, not two
+    // chained starts keep one frame loop, not two: one update per frame the page draws,
+    // whatever the display's rate (headless Firefox follows a 120 Hz screen while it is awake)
     await p.evaluate(() => {
       window.updates = 0;
+      window.frames = 0;
+      const t0 = performance.now();
+      const count = () => {
+        window.frames++;
+        if (performance.now() - t0 < 1000) requestAnimationFrame(count);
+      };
+      requestAnimationFrame(count);
       const next = () => window.Scrollwork.animate('#a', { x: [0, 1] }, { duration: 1.5, onUpdate: () => window.updates++ });
       window.Scrollwork.animate('#a', { x: [0, 1] }, { duration: 0.05, onComplete: next });
     });
     await p.waitForTimeout(1100);
-    const per = await p.evaluate(() => window.updates);
-    check(tag('an animation started from onComplete runs on the one loop'), per < 90, `${per} updates in about a second`);
+    const { per, frames } = await p.evaluate(() => ({ per: window.updates, frames: window.frames }));
+    check(tag('an animation started from onComplete runs on the one loop'), frames > 20 && per <= frames * 1.25, `${per} updates in ${frames} frames`);
     check(tag('no errors (review cases)'), errors.length === 0, errors.join(' | '));
     await ctx.close();
   }
