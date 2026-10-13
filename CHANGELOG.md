@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.13.2 (2026-10-13)
+
+- Scroll speed counts the scroll that wakes the loop. When nothing else moved,
+  the loop rested between scroll steps and its first frame after waking had no
+  length, so the step that woke it was dropped and the speed stayed 0: a
+  scroll fx (`distort` with `on: "scroll"`) alone on a page never moved. The
+  first frame after a wake now counts a frame's length.
+- Tests: a scroll `distort` alone on the page, stepped and wheeled.
+
 ## 1.13.1 (2026-10-12)
 
 - scrollwork/fx `distort` moves with no pointer: a slow sweep across the

@@ -1167,7 +1167,7 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
   let last = 0;
   const tick = (now: number) => {
     if (stopped) return;
-    const dt = last ? Math.min(100, now - last) : 0;
+    const dt = last ? Math.min(100, Math.max(0, now - last)) : 0;
     last = now;
     if (stale) {
       stale = false;
@@ -1213,7 +1213,10 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
   };
   wake = () => {
     if (raf || stopped || opts.seekOnly) return;
-    last = 0;
+    // a frame's length back, not 0: the scroll that woke the loop happened since the last
+    // frame drawn, and the first frame must count it as speed (a dt of 0 dropped it, and a
+    // scroll fx alone on the page never moved, 1.13.2)
+    last = win.performance.now() - 1000 / 60;
     raf = win.requestAnimationFrame(tick);
   };
 

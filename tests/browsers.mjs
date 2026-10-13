@@ -958,6 +958,58 @@ for (const name of BROWSERS) {
     await ctx.close();
   }
 
+  // ── distort on scroll alone on the page (1.13.2): nothing else keeps the loop awake, so each
+  //    wheel step wakes it; the step that woke it must count as speed, or the picture never moves ──
+  {
+    const fxScript = '<script src="/scrollwork.min.js"></script><script src="/scrollwork-fx.min.js"></script>';
+    const picture = `<script>(() => { const c = document.createElement('canvas'); c.width = 60; c.height = 40; const x = c.getContext('2d'); for (let i = 0; i < 6; i++) { x.fillStyle = i % 2 ? '#1030f0' : '#f01030'; x.fillRect(i * 10, 0, 10, 40); } window.__pic = c.toDataURL(); })();</script>`;
+    const body = `<div style="height:60px"></div><div id="so" style="width:300px;height:200px;background:url() center / cover" data-scrollwork='{"fx":[{"type":"distort","on":"scroll","grid":20,"mouse":0.4,"strength":0.6}]}'></div><div style="height:2400px"></div>`;
+    const { p, ctx, errors } = await page(browser, picture + body, { script: fxScript });
+    const able = await p.evaluate(() => {
+      document.getElementById('so').style.backgroundImage = `url(${window.__pic})`;
+      const can = typeof OffscreenCanvas !== 'undefined' && !!new OffscreenCanvas(1, 1).getContext('webgl2') && !!document.createElement('canvas').getContext('bitmaprenderer');
+      window.sw = window.Scrollwork.auto(document.body, { plugins: [window.ScrollworkFx.fx] });
+      return can;
+    });
+    if (!able) {
+      check(tag('distort scroll alone: no WebGL2 here, the page plays without it'), errors.length === 0, errors.join(' | '));
+    } else {
+      await sleep(600);
+      const view = () => p.evaluate(() => getComputedStyle(document.querySelector('#so > canvas.ux-motion-fx')).display);
+      check(tag('distort scroll alone: at rest it shows the picture'), (await view()) === 'none');
+      // the page scrolled a step at a time, the loop resting between steps
+      const stepped = await p.evaluate(async () => {
+        let shown = 0;
+        for (let i = 0; i < 16; i++) {
+          window.scrollBy(0, 30);
+          for (let f = 0; f < 3; f++) {
+            await new Promise((r) => requestAnimationFrame(r));
+            if (getComputedStyle(document.querySelector('#so > canvas.ux-motion-fx')).display === 'block') shown++;
+          }
+        }
+        return shown;
+      });
+      check(tag('distort scroll alone: scrolled step by step, the scroll speed moves it'), stepped > 0, `${stepped} of 48 frames drawn`);
+      await sleep(2500);
+      await p.evaluate(() => window.scrollTo(0, 0));
+      await sleep(2500);
+      // a real wheel
+      await p.mouse.move(150, 150);
+      let wheeled = 0;
+      for (let i = 0; i < 10; i++) {
+        await p.mouse.wheel(0, 60);
+        await sleep(30);
+        if ((await view()) === 'block') wheeled++;
+      }
+      check(tag('distort scroll alone: a wheel moves it'), wheeled > 0, `${wheeled} of 10 wheel steps drawn`);
+      await sleep(3000);
+      check(tag('distort scroll alone: the page still, it settles back'), (await view()) === 'none');
+      await p.evaluate(() => window.sw.stop());
+    }
+    check(tag('no errors (distort scroll alone)'), errors.length === 0, errors.join(' | '));
+    await ctx.close();
+  }
+
   // ── distort under reduced motion: the picture as it is, nothing moves ──
   {
     const fxScript = '<script src="/scrollwork.min.js"></script><script src="/scrollwork-fx.min.js"></script>';
