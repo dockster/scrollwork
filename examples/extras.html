@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Scrollwork extras: flip, morph, follow, drag, sideways</title>
+  <style>
+    :root { --ink: #16160f; --paper: #fffff7; --accent: #6c4dff; }
+    @media (prefers-color-scheme: dark) { :root { --ink: #f2f2ea; --paper: #16160f; } }
+    body { margin: 0; font: 18px/1.5 system-ui, sans-serif; color: var(--ink); background: var(--paper); }
+    section { display: flex; flex-direction: column; align-items: center; gap: 24px; padding: 80px 24px; }
+    h2 { margin: 0; font-size: 28px; }
+    button { font: inherit; padding: 8px 16px; border-radius: 999px; border: 1px solid var(--ink); background: transparent; color: var(--ink); cursor: pointer; }
+    .grid { display: flex; flex-wrap: wrap; gap: 12px; width: min(560px, 100%); }
+    .grid.list { flex-direction: column; }
+    .card { display: flex; align-items: center; justify-content: center; width: 128px; height: 96px; border-radius: 16px; background: var(--ink); color: var(--paper); }
+    .grid.list .card { width: 100%; height: 48px; }
+    .shape { width: 200px; height: 200px; }
+    .shape path { fill: var(--accent); }
+    .flight { position: relative; width: min(600px, 100%); }
+    .flight svg { width: 100%; height: auto; }
+    .flight path { stroke: var(--ink); stroke-dasharray: 4 6; fill: none; }
+    .plane { position: absolute; left: 0; top: 0; width: 24px; height: 12px; border-radius: 6px; background: var(--accent); }
+    .rail { width: min(560px, 100%); overflow: hidden; border-radius: 16px; }
+    .belt { display: flex; gap: 12px; width: max-content; }
+    .belt div { flex: none; width: 200px; height: 140px; border-radius: 16px; background: var(--ink); color: var(--paper); display: flex; align-items: center; justify-content: center; }
+    .work { padding: 0; }
+    .work .track { display: flex; width: max-content; }
+    .work .panel { flex: none; display: flex; align-items: center; justify-content: center; width: 100vw; height: 100vh; font-size: 48px; }
+    .work .panel:nth-child(odd) { background: var(--ink); color: var(--paper); }
+  </style>
+</head>
+<body>
+  <section><h2>flip</h2><button id="toggle">Grid or list</button>
+    <div class="grid"><div class="card">1</div><div class="card">2</div><div class="card">3</div><div class="card">4</div><div class="card">5</div><div class="card">6</div></div></section>
+  <section><h2>morph</h2><button id="shape">Change shape</button>
+    <svg class="shape" viewBox="0 0 100 100"><path id="blob" d="M50 5 C80 5 95 25 95 50 C95 80 75 95 50 95 C20 95 5 75 5 50 C5 20 25 5 50 5 Z"/></svg></section>
+  <section><h2>follow</h2><div class="flight"><svg viewBox="0 0 600 200"><path id="route" d="M10 180 C150 -40 300 260 590 20"/></svg><div class="plane"></div></div></section>
+  <section><h2>drag</h2><div class="rail"><div class="belt" tabindex="0" aria-label="Cards, drag or use the arrow keys"><div>A</div><div>B</div><div>C</div><div>D</div><div>E</div></div></div></section>
+  <section class="work"><div class="track"><div class="panel">One</div><div class="panel">Two</div><div class="panel">Three</div></div></section>
+  <section><h2>The end</h2></section>
+  <!-- After `npm run build` -->
+  <script src="../dist/scrollwork.min.js"></script>
+  <script src="../dist/scrollwork-extras.min.js"></script>
+  <script>
+    const { animate, scroll } = Scrollwork;
+    const { capture, flip, morph, follow, drag, sideways } = ScrollworkExtras;
+
+    document.getElementById('toggle').onclick = () => {
+      const before = capture('.card');
+      document.querySelector('.grid').classList.toggle('list');
+      flip(before, { duration: 0.6, ease: 'expo', stagger: 0.03 });
+    };
+
+    const star = 'M50 4 L61 38 L97 38 L68 59 L79 94 L50 72 L21 94 L32 59 L3 38 L39 38 Z';
+    const round = document.getElementById('blob').getAttribute('d');
+    let starred = false;
+    document.getElementById('shape').onclick = () => {
+      starred = !starred;
+      morph('#blob', starred ? star : round, { duration: 0.8, ease: 'in-out' });
+    };
+
+    // the plane flies the route as the page scrolls past it
+    scroll(animate(follow('.plane', '#route', { align: true, rotate: true }), { progress: [0, 1] }, { autoplay: false, ease: 'linear' }), { target: '.flight', range: 'through' });
+
+    // the belt: dragged sideways inside its rail, thrown, landing on a card
+    drag('.belt', { axis: 'x', bounds: '.rail', snap: 212, step: 212 });
+
+    // three panels pass sideways while the page scrolls down
+    sideways('.work', { snap: 'panels', smooth: 0.2 });
+  </script>
+</body>
+</html>

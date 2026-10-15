@@ -44,6 +44,11 @@ writeFileSync(join(dir, 'fx.mjs'), `import { fx, readFx, FX_DEFAULTS, version } 
 const fxm = run(['fx.mjs']);
 check('scrollwork/fx imports without a DOM, at the core version', fxm.ok && fxm.out.trim() === 'fx function object true', fxm.out.trim().slice(0, 160));
 
+// the extras: a subpath of their own, importable where there is no window, using the core rather than a copy of it
+writeFileSync(join(dir, 'extras.mjs'), `import * as x from 'scrollwork/extras'; import { version as core } from 'scrollwork'; console.log(typeof x.flip, typeof x.capture, typeof x.morph, typeof x.follow, typeof x.drag, typeof x.sideways, x.version === core);`);
+const xm = run(['extras.mjs']);
+check('scrollwork/extras imports without a DOM, at the core version', xm.ok && xm.out.trim() === 'function function function function function function true', xm.out.trim().slice(0, 160));
+
 writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'consumer', type: 'module', private: true }));
 writeFileSync(
   join(dir, 'tsconfig.json'),
@@ -53,6 +58,13 @@ writeFileSync(
   join(dir, 'use.ts'),
   `import { animate, start, type MotionSpec, type Controls } from 'scrollwork';
 import { fx, type Fx } from 'scrollwork/fx';
+import { capture, drag, flip, follow, morph, sideways, type Draggable } from 'scrollwork/extras';
+import { timeline, type Timeline } from 'scrollwork';
+const d: Draggable = drag('.a', { axis: 'x', snap: [0, 100], bounds: { left: 0, right: 200 } });
+const f: Timeline = flip(capture('.a'), { scale: false });
+const tl: Timeline = timeline().add('.a', { width: '40%', '--k': 1, draw: [0, 1] }, { duration: 1 }, '-=0.2').add(follow('.b', '#p', { rotate: true }), { progress: 1 });
+const m: Controls = morph('#p', '#q');
+const side = sideways('.s', { snap: 'panels' });
 const spec: MotionSpec = { items: [{ id: 'a', text: false, fx: [{ type: 'glitch', on: 'hover' }] }], smooth: false };
 const one: Fx = { type: 'glitch', on: 'hover', intensity: 1, speed: 1, seed: 0, in: 0.1, out: 0.3, blocks: 24, split: 6 };
 const c: Controls = animate('.a', { y: [40, 0] }, { duration: 0.4 });

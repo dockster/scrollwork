@@ -1,5 +1,57 @@
 # Changelog
 
+## 1.14.0 (unreleased)
+
+- `TransitionType` takes `curtain`: a screen change its host plays with a panel
+  of one colour passing between the two screens; an interaction's animation
+  keeps its `cover` colour (#RRGGBB) for it.
+- `timeline()`: several motions in sequence, overlapping where asked
+  (`'-=0.3'`, `'<'`, `'>'`, labels), with `call()` and `label()`, played,
+  reversed, sought, repeated or scrubbed by `scroll()` as one. Two motions on
+  the same value of an element hand over; one given only an end starts where
+  the one before left off; a fade in later on is hidden from the start.
+- `animate()` moves any CSS property or variable, colours included, values
+  with several numbers (`clipPath`, `boxShadow`) number by number, and a plain
+  object's numbers; `draw` draws an SVG line; `scaleX`, `scaleY`, `rotateX`
+  and `rotateY` join the motion values. `cancel()` gives every property back.
+- `scroll()`: `start` and `end` anywhere (`"top 80%"`, `end: "+=600"`, a
+  scroll position), `smooth` for a softer scrub, `snap` to the nearest point
+  once scrolling stops, and `onEnter`, `onLeave`, `onEnterBack`, `onLeaveBack`.
+- Controls have `duration` (seconds).
+- In the spec: a state's `clip` hides part of the element from each side
+  (`{ top: 100, right: 100 }` opens from the bottom-left corner as it moves
+  to `{}`), on appear, scroll, loop, hover and interactions; a scroll motion
+  takes an `ease`; and `split` (lines, words, letters) with `spread` lights
+  text piece by piece as the page scrolls. Under reduced motion the pieces are
+  as they are.
+- Formations: a scroll's `split: "children"` moves each element inside in
+  turn (pictures flying into their grid while it is pinned), in an `order`
+  (start, end, center, edges, random), each from its own start: `outward`
+  points `from` away from the centre and turns it as far as the child is from
+  it, `vary` (0 to 1) makes each start a little different (seeded), and
+  `origin` sets the point they turn about. After Codrops' On-Scroll Layout
+  Formations (MIT, docs/THIRD-PARTY.md), without GSAP.
+- Rollover `scramble`: each letter flickers through random characters, one
+  after another, and lands on its own (`turns`, `glyphs`, a `cursor` block,
+  random `colors`), on hover and keyboard focus, as the text comes into view
+  (typed in), or both (`on`). Each letter keeps its width, a screen reader
+  reads the words once, nothing moves under reduced motion. A roll and a
+  scramble do not share the letters. After Codrops' Line Text Hover
+  Animations (MIT, docs/THIRD-PARTY.md), without GSAP or SplitType.
+- scrollwork.min.js is 28.1 KB gzipped (budget 28.5).
+- `scrollwork/extras`, a new optional file (4.9 KB gzipped, budget 5), on
+  `animate()`, `timeline()` and `scroll()` without a copy of the core:
+  `flip()` for layout changes, `morph()` and `shape()` for one SVG shape into
+  another, `follow()` along an SVG path, `drag()` with bounds, a throw, snap
+  points and the arrow keys, and `sideways()` for a section that scrolls
+  sideways while the page scrolls down.
+- scrollwork.min.js was 25.6 KB gzipped at this point (budget 26, was 22.5); a project
+  importing the module carries only what it uses. The package description no
+  longer says "a few KB".
+- Tests: unit tests for values, placement, scroll places, snap, and the
+  extras' arithmetic; browser tests for each in Chromium, WebKit and Firefox;
+  examples/timeline.html and examples/extras.html.
+
 ## 1.13.2 (2026-10-13)
 
 - Scroll speed counts the scroll that wakes the loop. When nothing else moved,

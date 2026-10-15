@@ -22,8 +22,11 @@ export interface State {
   opacity: number;
   /** px */
   blur: number;
-  /** percent of the element hidden from the bottom */
+  /** percent of the element hidden from the bottom, and from the top, right and left */
   clip: number;
+  ct: number;
+  cr: number;
+  cl: number;
   /** one axis, on top of `scale` */
   sx: number;
   sy: number;
@@ -44,7 +47,7 @@ export interface Pic {
   k: number;
 }
 
-export const identity = (): State => ({ x: 0, y: 0, yp: 0, scale: 1, rotate: 0, rx: 0, ry: 0, pz: 0, opacity: 1, blur: 0, clip: 0, sx: 1, sy: 1, fill: null, ink: null, image: null });
+export const identity = (): State => ({ x: 0, y: 0, yp: 0, scale: 1, rotate: 0, rx: 0, ry: 0, pz: 0, opacity: 1, blur: 0, clip: 0, ct: 0, cr: 0, cl: 0, sx: 1, sy: 1, fill: null, ink: null, image: null });
 
 const mixRgba = (a: Rgba, b: Rgba, k: number): Rgba => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k, a[3] + (b[3] - a[3]) * k];
 /** between two tints: the colour too when both have one, and how far along */
@@ -74,6 +77,9 @@ export const mix = (a: State, b: State, k: number): State => ({
   opacity: a.opacity + (b.opacity - a.opacity) * k,
   blur: Math.max(0, a.blur + (b.blur - a.blur) * k),
   clip: a.clip + (b.clip - a.clip) * k,
+  ct: a.ct + (b.ct - a.ct) * k,
+  cr: a.cr + (b.cr - a.cr) * k,
+  cl: a.cl + (b.cl - a.cl) * k,
   sx: a.sx + (b.sx - a.sx) * k,
   sy: a.sy + (b.sy - a.sy) * k,
   fill: mixTint(a.fill, b.fill, k),
@@ -95,6 +101,9 @@ export const combine = (a: State, b: State): State => ({
   opacity: a.opacity * b.opacity,
   blur: a.blur + b.blur,
   clip: Math.max(a.clip, b.clip),
+  ct: Math.max(a.ct, b.ct),
+  cr: Math.max(a.cr, b.cr),
+  cl: Math.max(a.cl, b.cl),
   sx: a.sx * b.sx,
   sy: a.sy * b.sy,
   fill: further(a.fill, b.fill),
@@ -201,6 +210,11 @@ export const putInline = (el: HTMLElement, v: Inline) => {
 /** write, and remember what was written (as the browser keeps it) */
 const write = (el: HTMLElement, v: Inline) => {
   putInline(el, v);
+  (el as Held).__scrollworkPaint = current(el);
+};
+
+/** what is painted now is Scrollwork's, not the author's (after writing a property style.ts does not paint itself) */
+export const remember = (el: HTMLElement) => {
   (el as Held).__scrollworkPaint = current(el);
 };
 
@@ -319,7 +333,8 @@ export function paint(el: HTMLElement, s: State, b: Base) {
   el.style.transform = s.rx || s.ry ? 'perspective(' + (s.pz || 1000) + 'px) rotateX(' + s.rx + 'deg) rotateY(' + s.ry + 'deg)' + (b.inline.transform ? ' ' + b.inline.transform : '') : b.inline.transform;
   el.style.opacity = s.opacity < 0.999 ? String(Math.max(0, b.opacity * s.opacity)) : b.inline.opacity;
   el.style.filter = s.blur > 0.01 ? 'blur(' + s.blur + 'px)' + (b.filter ? ' ' + b.filter : '') : b.inline.filter;
-  el.style.clipPath = s.clip > 0.01 ? 'inset(0 0 ' + s.clip + '% 0)' : b.inline.clipPath;
+  el.style.clipPath =
+    s.clip > 0.01 || s.ct > 0.01 || s.cr > 0.01 || s.cl > 0.01 ? 'inset(' + s.ct + '% ' + s.cr + '% ' + s.clip + '% ' + s.cl + '%)' : b.inline.clipPath;
   // a colour: part of the way from the element's own to the state's
   el.style.backgroundColor = s.fill && s.fill.k > 0.001 ? cssRgba(mixRgba(b.bg, s.fill.c, Math.min(1, s.fill.k))) : b.inline.backgroundColor;
   const ink = s.ink && s.ink.k > 0.001 ? cssRgba(mixRgba(b.ink, s.ink.c, Math.min(1, s.ink.k))) : null;

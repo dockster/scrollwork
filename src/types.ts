@@ -32,6 +32,12 @@ export interface MotionState {
   ink?: string;
   /** a picture to show in place of the element's own, by URL: an <img>'s src, any other element's background-image. Swapped halfway through the motion */
   image?: string;
+  /**
+   * percent of the element hidden from each side, 0 to 100 (a clip-path
+   * inset): `{ top: 100, right: 100 }` is nothing, opening from the
+   * bottom-left corner as it moves to `{}`
+   */
+  clip?: { top?: number; right?: number; bottom?: number; left?: number };
 }
 
 /** The easing functions of easings.net, by family: `ease-in-sine` to `ease-in-out-bounce`. */
@@ -153,7 +159,37 @@ export interface ScrollMotion {
   keys?: MotionKey[];
   /** another element whose passage drives it; a pinned trigger drives it across its hold */
   trigger?: string;
+  /** the curve across the range; linear when unset */
+  ease?: MotionEase;
+  /**
+   * from and to apply to each piece in turn as the page scrolls, rather than
+   * to the block: a text's lines, words or letters (words lighting up as they
+   * are read), or `children`, each element inside it (pictures flying into
+   * their grid while it is pinned)
+   */
+  split?: ScrollSplit;
+  /** with split: the share of the range each piece takes to change, 0.05 to 1 (0.3); smaller is one after another, larger together */
+  spread?: number;
+  /** with split: which piece goes first: in order, from the end, from the centre out, from the edges in, or at random */
+  order?: ScrollOrder;
+  /**
+   * children: each child's start takes its side of the centre. A start that
+   * moves across and down spreads from the centre (a grid gathering from all
+   * round); one that moves one way only keeps it for all (rising from
+   * below). Turns (rotate, rotateX, rotateY) open out, as far as the child is
+   * from the centre (a fan).
+   */
+  outward?: boolean;
+  /** children: 0 to 1, how much each child's start differs from the next (seeded, so the same each time); rotations may turn either way */
+  vary?: number;
+  /** children: the point each one turns and scales about */
+  origin?: ScrollOrigin;
 }
+
+/** What a scroll motion moves in turn: a text's lines, words or letters, or the element's children. */
+export type ScrollSplit = TextSplit | 'children';
+export type ScrollOrder = 'start' | 'end' | 'center' | 'edges' | 'random';
+export type ScrollOrigin = 'center' | 'top' | 'bottom' | 'left' | 'right';
 
 /** Pin: the element holds its place on screen for a stretch of scrolling. */
 export interface PinMotion {
@@ -191,7 +227,8 @@ export interface CursorMotion {
  * motion (a wipe's colours change at once) or on a touch screen.
  */
 export interface RolloverMotion {
-  effect: 'roll' | 'wipe';
+  /** scramble: each letter flickers through random characters, one after another, before landing on its own */
+  effect: 'roll' | 'wipe' | 'scramble';
   /** where it moves. roll: up (out the top, the copy from below) or down; wipe: the way the colour travels (right starts at the left edge), or center, outward */
   direction: 'up' | 'down' | 'left' | 'right' | 'center';
   /** seconds each letter, or the wipe, takes */
@@ -205,6 +242,16 @@ export interface RolloverMotion {
   ink?: string;
   /** the id of the element whose hover plays it; the nearest link or button around it when unset */
   trigger?: string;
+  /** scramble: random characters each letter shows before its own (3) */
+  turns?: number;
+  /** scramble: the characters it draws from; letters and symbols when unset */
+  glyphs?: string;
+  /** scramble: a block of the text's colour on each letter as it starts, like a terminal's cursor */
+  cursor?: boolean;
+  /** scramble: colours the random characters take, one at random each time; the text's own when unset */
+  colors?: string[];
+  /** scramble: when it plays: on hover (and keyboard focus), as it comes into view, or both */
+  on?: 'hover' | 'appear' | 'both';
 }
 
 /**
@@ -243,7 +290,7 @@ export type InteractionAction =
    */
   | { type: 'custom'; name: string; data?: unknown };
 
-export type TransitionType = 'instant' | 'dissolve' | 'smart' | 'move-in' | 'move-out' | 'push' | 'slide-in' | 'slide-out';
+export type TransitionType = 'instant' | 'dissolve' | 'smart' | 'move-in' | 'move-out' | 'push' | 'slide-in' | 'slide-out' | 'curtain';
 export type TransitionDirection = 'left' | 'right' | 'top' | 'bottom';
 
 /** How an interaction moves: instantly, or along a curve (named, or a custom cubic bezier). */
@@ -259,6 +306,8 @@ export interface InteractionAnimation {
   /** for screen changes, handed to the navigate option */
   transition?: TransitionType;
   direction?: TransitionDirection;
+  /** a curtain's panel colour, #RRGGBB, handed on with the transition */
+  cover?: string;
 }
 
 export interface Interaction {

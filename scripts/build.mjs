@@ -43,6 +43,18 @@ await build({ ...common, entryPoints: ['src/global.ts'], format: 'iife', minify:
 await build({ ...common, entryPoints: ['src/fx/index.ts'], format: 'esm', outfile: 'dist/fx.mjs' });
 await build({ ...common, entryPoints: ['src/fx/global.ts'], format: 'iife', outfile: 'dist/scrollwork-fx.js' });
 await build({ ...common, entryPoints: ['src/fx/global.ts'], format: 'iife', minify: true, outfile: 'dist/scrollwork-fx.min.js', plugins: [glslTrim] });
+// The extras use the core's animate(), timeline() and scroll(): the module imports them from
+// 'scrollwork' and the plain script reads window.Scrollwork, so neither carries a copy of the core
+const core = (esm) => ({
+  name: 'core',
+  setup(b) {
+    b.onResolve({ filter: /^\.\.\/index\.js$/ }, (a) => (/[\\/]extras[\\/]/.test(a.importer) ? (esm ? { path: 'scrollwork', external: true } : { path: 'core', namespace: 'sw-core' }) : undefined));
+    b.onLoad({ filter: /.*/, namespace: 'sw-core' }, () => ({ contents: 'module.exports = window.Scrollwork', loader: 'js' }));
+  },
+});
+await build({ ...common, entryPoints: ['src/extras/index.ts'], format: 'esm', outfile: 'dist/extras.mjs', plugins: [core(true)] });
+await build({ ...common, entryPoints: ['src/extras/global.ts'], format: 'iife', outfile: 'dist/scrollwork-extras.js', plugins: [core(false)] });
+await build({ ...common, entryPoints: ['src/extras/global.ts'], format: 'iife', minify: true, outfile: 'dist/scrollwork-extras.min.js', plugins: [core(false)] });
 execFileSync('npx', ['tsc', '-p', 'tsconfig.json'], { stdio: 'inherit' });
 
 /** KB gzipped each minified file may reach; the README says these numbers */
@@ -52,9 +64,16 @@ execFileSync('npx', ['tsc', '-p', 'tsconfig.json'], { stdio: 'inherit' });
 // (docs/LETTER-ROLL-PLAN.md in uxdeck); the budget allows half a KB over, rather than trimming working code for bytes
 // the effects add-on grew to 8.9 with pixel distortion in 1.13.0 (Codrops' Distorted Pixels): 9
 // 1.13.1's sweep (distort with no pointer) took it to 9.1; the minified shaders lost their comments (glslTrim): 8.8
-const BUDGET = { 'scrollwork.min.js': 22.5, 'scrollwork-fx.min.js': 9 };
+// 1.14 (timeline(), any CSS property, variable, colour and object in animate(), SVG draw, scroll()'s
+// start and end, smooth, snap and enter/leave callbacks) takes it to 25.6: 26, for uxdeck's marketing site
+// (uxdeck docs/MARKETING-SITE-PLAN.md); a project importing the module only carries what it uses
+// the extras add-on (flip, morph, follow, drag, sideways) is 4.9 at 1.14: 5
+// the clip state (a corner reveal), a scroll's ease, and words lit one by one as the page scrolls: 26.1, so 26.5
+// formations (a scroll split by children: in an order, outward, varied, about an origin; Codrops' On-Scroll Layout Formations): 27.0, so 27.5
+// scramble (a hover and in-view letter scramble; Codrops' Line Text Hover Animations): 28.1, so 28.5
+const BUDGET = { 'scrollwork.min.js': 28.5, 'scrollwork-fx.min.js': 9, 'scrollwork-extras.min.js': 5 };
 let over = '';
-for (const f of ['scrollwork.mjs', 'scrollwork.js', 'scrollwork.min.js', 'fx.mjs', 'scrollwork-fx.js', 'scrollwork-fx.min.js']) {
+for (const f of ['scrollwork.mjs', 'scrollwork.js', 'scrollwork.min.js', 'fx.mjs', 'scrollwork-fx.js', 'scrollwork-fx.min.js', 'extras.mjs', 'scrollwork-extras.js', 'scrollwork-extras.min.js']) {
   const b = readFileSync(`dist/${f}`);
   const gz = gzipSync(b).length / 1024;
   const budget = BUDGET[f];
@@ -63,6 +82,7 @@ for (const f of ['scrollwork.mjs', 'scrollwork.js', 'scrollwork.min.js', 'fx.mjs
 }
 // the add-on must not carry a copy of the engine
 if (readFileSync('dist/fx.mjs', 'utf8').includes('requestAnimationFrame(tick)')) over += 'fx.mjs bundles the engine\n';
+for (const f of ['extras.mjs', 'scrollwork-extras.min.js']) if (/requestAnimationFrame\(frame\)|function startEngine/.test(readFileSync(`dist/${f}`, 'utf8'))) over += `${f} bundles the core\n`;
 if (over) {
   console.error(over.trim());
   process.exit(1);

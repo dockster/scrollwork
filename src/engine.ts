@@ -33,6 +33,10 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
     flip: { kids: HTMLElement[]; had: string[]; at: number } | null;
     /** split by lines: the words are regrouped when the width changes */
     lines: boolean;
+    /** the pieces are a scroll's, not an appear's */
+    scrollUnits: boolean;
+    /** a scroll split by children: each child with its own look, its start, and its turn */
+    formation: Array<{ el: HTMLElement; base: Base; from: State; rank: number; origin: string }> | null;
     top: number;
     height: number;
     /** the parent's box, for a parallax that keeps covering it */
@@ -78,6 +82,12 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
     if (m.fill) s.fill = { c: colourOf(m.fill), k: 1 };
     if (m.ink) s.ink = { c: colourOf(m.ink), k: 1 };
     if (m.image) s.image = { url: m.image, k: 1 };
+    if (m.clip) {
+      s.ct = m.clip.top || 0;
+      s.cr = m.clip.right || 0;
+      s.clip = m.clip.bottom || 0;
+      s.cl = m.clip.left || 0;
+    }
     return s;
   };
   /** a timeline of stops at 0-100%: the state `k` (0-1) of the way along, each step eased on its own */
@@ -288,12 +298,17 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
     if (!el) continue;
     const base = readBase(el);
     const a = item.appear;
-    const splitBy = a && item.text && opts.split && a.split !== 'none' ? a.split : null;
+    // an appear's split first; else a scroll's (words lit as the page scrolls)
+    const appearSplit = a && item.text && opts.split && a.split !== 'none' ? a.split : null;
+    const scrollSplit = !appearSplit && item.scroll && item.scroll.split && item.scroll.split !== 'none' && item.scroll.split !== 'children' && item.text && opts.split ? (item.scroll.split as 'lines' | 'words' | 'chars') : null;
+    const splitBy = appearSplit || scrollSplit;
     const entry: Entry = {
       item,
       el,
       // a roll masks too: what is not a digit slides up into its word
-      units: splitBy ? split(el, splitBy, a!.effect === 'mask' || a!.effect === 'roll', a!.effect === 'roll' ? (a!.turns ?? 1) : -1) : [],
+      units: appearSplit ? split(el, appearSplit, a!.effect === 'mask' || a!.effect === 'roll', a!.effect === 'roll' ? (a!.turns ?? 1) : -1) : scrollSplit ? split(el, scrollSplit, false) : [],
+      scrollUnits: !!scrollSplit,
+      formation: null,
       base,
       unit: { ...NONE, ink: base.ink },
       tilt: 0,
@@ -314,6 +329,21 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
     };
     entries.push(entry);
     byEl.set(el, entry);
+    // a formation: each child moves in turn (their looks read now, their starts at each measure)
+    if (item.scroll && item.scroll.split === 'children') {
+      const ORIGIN: Record<string, string> = { top: '50% 0%', bottom: '50% 100%', left: '0% 50%', right: '100% 50%' };
+      const origin = ORIGIN[item.scroll.origin || 'center'] || '';
+      entry.formation = Array.from(el.children)
+        .filter((c): c is HTMLElement => c instanceof win.HTMLElement)
+        .map((c) => {
+          const own = c.style.transformOrigin;
+          if (origin) {
+            c.style.transformOrigin = origin;
+            restores.push(() => (c.style.transformOrigin = own));
+          }
+          return { el: c, base: readBase(c), from: identity(), rank: 0, origin };
+        });
+    }
     // an upright loop: the children are read once, with the rotation their own CSS gives them
     if (item.loop && item.loop.upright) {
       entry.kids = [];
@@ -796,6 +826,74 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
     dirty = true;
     wake();
   };
+  /**
+   * A formation's starts, from where each child sits in the element: its
+   * distance from the centre (0 there, 1 in a corner) and its side, for
+   * `outward`; a seeded difference for `vary`; and its turn, by `order`.
+   */
+  const seeded = (i: number, salt: number) => {
+    const v = Math.sin(i * 12.9898 + salt * 78.233) * 43758.5453;
+    return v - Math.floor(v);
+  };
+  const formationOf = (e: Entry) => {
+    const sc = e.item.scroll!;
+    const fs = e.formation!;
+    const W = e.el.offsetWidth || 1;
+    const H = e.el.offsetHeight || 1;
+    const from = asState(sc.from);
+    const vary = Math.min(1, Math.max(0, sc.vary || 0));
+    const placed = fs.map((f, i) => {
+      // where the child is in the element, as laid out (offsets: no motion in them)
+      const c = f.el;
+      const same = c.offsetParent === e.el;
+      const x = (same ? c.offsetLeft : c.offsetLeft - e.el.offsetLeft) + c.offsetWidth / 2;
+      const y = (same ? c.offsetTop : c.offsetTop - e.el.offsetTop) + c.offsetHeight / 2;
+      const dx = (x - W / 2) / (W / 2);
+      const dy = (y - H / 2) / (H / 2);
+      return { f, i, dx, dy, dist: Math.min(1, Math.hypot(dx, dy) / Math.SQRT2) };
+    });
+    for (const p of placed) {
+      const s = { ...from };
+      if (sc.outward) {
+        const a = Math.atan2(Math.abs(p.dy), Math.abs(p.dx));
+        const sx = p.dx < 0 ? -1 : 1;
+        const sy = p.dy < 0 ? -1 : 1;
+        // a start that moves across and down spreads from the centre, each child from its own side (the
+        // child at the centre has none: it starts in place); one that moves one way only (up from below)
+        // keeps its way for all, and only the turns open out
+        if (from.x && from.y) {
+          const near = p.dist < 0.05 ? 0 : 1;
+          s.x = near * sx * Math.cos(a) * Math.abs(from.x);
+          s.y = near * sy * Math.sin(a) * Math.abs(from.y);
+        }
+        // a child on the centre line has no side to lean to
+        const tx = Math.abs(p.dx) < 0.02 ? 0 : sx;
+        const ty = Math.abs(p.dy) < 0.02 ? 0 : sy;
+        s.rotate = -tx * Math.abs(from.rotate) * p.dist;
+        s.rx = -ty * Math.sin(a) * Math.abs(from.rx) * p.dist;
+        s.ry = -tx * Math.cos(a) * Math.abs(from.ry) * p.dist;
+      }
+      if (vary) {
+        const m = (salt: number) => 1 - vary + 2 * vary * seeded(p.i, salt);
+        s.x *= m(1);
+        s.y *= m(2);
+        // a rotation may also turn the other way
+        const turn = (v: number, salt: number) => (sc.outward ? v : seeded(p.i, salt) < vary / 2 ? -v : v) * m(salt + 10);
+        s.rotate = turn(s.rotate, 3);
+        s.rx = turn(s.rx, 4);
+        s.ry = turn(s.ry, 5);
+      }
+      p.f.from = s;
+    }
+    // the turns: in order, from the end, by distance from the centre (in or out), or seeded
+    const key = (p: (typeof placed)[number]) =>
+      sc.order === 'end' ? -p.i : sc.order === 'center' ? p.dist : sc.order === 'edges' ? -p.dist : sc.order === 'random' ? seeded(p.i, 9) : p.i;
+    placed
+      .slice()
+      .sort((a, b) => key(a) - key(b) || a.i - b.i)
+      .forEach((p, r) => (p.f.rank = r));
+  };
+
   let lastY = -1;
   let lastVh = -1;
   const measure = () => {
@@ -808,6 +906,7 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
       e.pHeight = parent ? parent.offsetHeight : 0;
       // the width changed, so the lines wrap somewhere else
       if (e.lines && e.units.length) group(e.units);
+      if (e.formation) formationOf(e);
     }
     for (const [el, m] of others) {
       m.top = layoutTop(el);
@@ -931,7 +1030,33 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
         }
         const k = clamp01((y - start) / Math.max(1, end - start));
         e.sig.scroll = k;
-        own = combine(own, timeline(asState(sc.from), sc.keys, asState(sc.to), k, EASES.linear));
+        const sEase = (sc.ease && EASES[sc.ease]) || EASES.linear;
+        if (e.formation && e.formation.length) {
+          // each child in its turn, from its own start to the end state
+          const w = Math.min(1, Math.max(0.05, sc.spread ?? 0.3));
+          const n = e.formation.length;
+          const to = asState(sc.to);
+          for (const f of e.formation) {
+            const s0 = n > 1 ? (f.rank / (n - 1)) * (1 - w) : 0;
+            paint(f.el, timeline(f.from, sc.keys, to, clamp01((k - s0) / w), sEase), f.base);
+          }
+        } else if (e.scrollUnits && e.units.length) {
+          // each piece takes its share of the range in turn: the first starts at 0, the last ends at 1
+          const w = Math.min(1, Math.max(0.05, sc.spread ?? 0.3));
+          const n = e.units.length;
+          const from = asState(sc.from);
+          const to = asState(sc.to);
+          for (const u of e.units) {
+            const s0 = n > 1 ? (u.index / (n - 1)) * (1 - w) : 0;
+            paint(u.el, timeline(from, sc.keys, to, clamp01((k - s0) / w), sEase), e.unit);
+          }
+        } else own = combine(own, timeline(asState(sc.from), sc.keys, asState(sc.to), k, sEase));
+      } else if (sc && e.scrollUnits) {
+        // under reduced motion the words are as they are
+        for (const u of e.units) paint(u.el, identity(), e.unit);
+      } else if (sc && e.formation) {
+        // and the children in their places
+        for (const f of e.formation) paint(f.el, identity(), f.base);
       }
 
       const a = it.appear;
@@ -1235,7 +1360,8 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
       let mounted = false;
       for (const r of e.item.rollover || []) {
         // letters an appear already split are its own: a roll would split them again
-        if (r.effect === 'roll' && (e.units.length > 0 || !opts.split)) continue;
+        // a roll and a scramble take the letters: not when an appear has split them already, or splitting is off
+        if ((r.effect === 'roll' || r.effect === 'scramble') && (e.units.length > 0 || !opts.split)) continue;
         mountRollover(e.el, r, ctx);
         mounted = true;
       }
@@ -1628,6 +1754,7 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
         // the author's inline values come back, not blanks
         release(e.el, e.base.inline);
         for (const u of e.units) putInline(u.el, BLANK);
+        if (e.formation) for (const f of e.formation) release(f.el, f.base.inline);
       }
       // back where they were in the page, once nothing painted is left on them
       for (const p of stickies.values()) unstick(p);

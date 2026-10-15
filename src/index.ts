@@ -1,5 +1,5 @@
 // Scrollwork: scroll, appear, pin and interaction motion, from a spec or from
-// data-scrollwork attributes, plus animate(), inView() and scroll() for code.
+// data-scrollwork attributes, plus animate(), timeline(), inView() and scroll() for code.
 
 import { autoWith, readPage, type AutoOptions } from './auto.js';
 import { startEngine } from './engine.js';
@@ -21,9 +21,10 @@ export function auto(root?: HTMLElement, options?: AutoOptions): MotionControl {
 }
 
 export { readPage, readSpec };
-export { animate, type AnimateOptions, type Controls, type Keyframes, type Targets, type Value } from './animate.js';
+export { animate, type AnimateOptions, type Controls, type CssValue, type Keyframes, type Targets, type Value } from './animate.js';
+export { timeline, type Position, type Timeline, type TimelineOptions, type TweenOptions } from './timeline.js';
 export { inView, type InViewOptions } from './inview.js';
-export { scroll, type ScrollOptions, type ScrollHandler } from './scroll.js';
+export { scroll, type ScrollOptions, type ScrollHandler, type ScrollRange } from './scroll.js';
 export { bezier, CURVES, cssEase, DRAWN, EASES, EASINGS, easeOf, spring, SPRINGS, type DrawnEase, type EaseFn, type EaseInput } from './easing.js';
 export type { AutoOptions } from './auto.js';
 export * from './types.js';

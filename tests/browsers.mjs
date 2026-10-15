@@ -41,7 +41,7 @@ const page = async (browser, body, { reduced = false, counting = false, head = '
     const path = new URL(route.request().url()).pathname;
     if (path === '/') return route.fulfill({ contentType: 'text/html', body: html });
     const file = path.slice(1);
-    if (['scrollwork.min.js', 'scrollwork.js', 'scrollwork.mjs', 'scrollwork-fx.min.js', 'scrollwork-fx.js', 'fx.mjs'].includes(file)) return route.fulfill({ contentType: 'text/javascript', body: DIST(file) });
+    if (['scrollwork.min.js', 'scrollwork.js', 'scrollwork.mjs', 'scrollwork-fx.min.js', 'scrollwork-fx.js', 'fx.mjs', 'scrollwork-extras.min.js', 'scrollwork-extras.js', 'extras.mjs'].includes(file)) return route.fulfill({ contentType: 'text/javascript', body: DIST(file) });
     return route.fulfill({ status: 404, body: '' });
   });
   await p.goto(`${ORIGIN}/`);
@@ -1323,6 +1323,607 @@ for (const name of BROWSERS) {
     const tapped = await tp.evaluate(() => getComputedStyle(document.getElementById('wipe')).backgroundSize.split(',')[0].trim());
     check(tag('touch: a tap does not play the wipe'), tapped === '0% 100%', tapped);
     await tctx.close();
+  }
+
+
+  // ── 1.14: timeline(), any property, SVG draw, and scroll()'s start, end, smooth, snap and callbacks ──
+  {
+    const { p, ctx, errors } = await page(
+      browser,
+      `<style>.box{width:200px;height:40px} #w2{width:200px}</style>
+       <div id="a" class="box">a</div><div id="b" class="box">b</div><div id="c" class="box">c</div>
+       <div id="d" class="box">d</div><div id="e" class="box">e</div>
+       <div id="w" class="box">w</div><div id="w2" class="box">w2</div><div id="v" class="box">v</div>
+       <div id="col" class="box" style="background-color:#000000">col</div><div id="clip" class="box">clip</div>
+       <svg width="300" height="60"><path id="line" d="M0 30 H200" stroke="black" fill="none"/></svg>`
+    );
+    const x = (id) => `new DOMMatrix(getComputedStyle(document.getElementById('${id}')).transform).e || parseFloat((getComputedStyle(document.getElementById('${id}')).translate || '0').split(' ')[0]) || 0`;
+    const tlA = await p.evaluate((x) => {
+      const X = (id) => new Function('return ' + x.replace(/\$\{id\}/g, id))();
+      const S = window.Scrollwork;
+      window.tl = S.timeline({ autoplay: false })
+        .add('#a', { x: [0, 100] }, { duration: 0.4, ease: 'linear' })
+        .add('#b', { x: [0, 100] }, { duration: 0.4, ease: 'linear' });
+      return null;
+    }, '');
+    await sleep(30);
+    const at = async (prog) => p.evaluate((prog) => {
+      window.tl.seek(prog);
+      const tx = (id) => parseFloat((getComputedStyle(document.getElementById(id)).translate || '0').split(' ')[0]) || 0;
+      return { a: tx('a'), b: tx('b') };
+    }, prog);
+    const q1 = await at(0.25);
+    const q3 = await at(0.75);
+    const dur = await p.evaluate(() => window.tl.duration);
+    check(tag('timeline: one after the other'), Math.abs(q1.a - 50) < 1 && q1.b === 0 && q3.a === 100 && Math.abs(q3.b - 50) < 1 && Math.abs(dur - 0.8) < 1e-6, JSON.stringify({ q1, q3, dur }));
+
+    const places = await p.evaluate(() => {
+      const S = window.Scrollwork;
+      const t = S.timeline({ autoplay: false, defaults: { duration: 1 } }).add({ v: 0 }, { v: 1 }).add({ v: 0 }, { v: 1 }, {}, '-=0.5').label('mid').add({ v: 0 }, { v: 1 }, { duration: 0.5 }, '<').add({ v: 0 }, { v: 1 }, { duration: 0.5 }, 'mid+=1');
+      return { d: t.duration, mid: t.labelAt('mid') };
+    });
+    check(tag('timeline: overlaps, "<" and labels place motions'), Math.abs(places.d - 3) < 1e-6 && Math.abs(places.mid - 1.5) < 1e-6, JSON.stringify(places));
+
+    const hand = await p.evaluate(() => {
+      const S = window.Scrollwork;
+      const tx = (id) => parseFloat((getComputedStyle(document.getElementById(id)).translate || '0').split(' ')[0]) || 0;
+      const t = S.timeline({ autoplay: false, defaults: { duration: 0.4, ease: 'linear' } })
+        .add('#c', { opacity: [1, 0] })
+        .add('#c', { y: [0, 100] })
+        .add('#d', { x: 100 }, {}, 0)
+        .add('#d', { x: 300 }, {}, 0.4)
+        .add('#e', { opacity: [0, 1] }, {}, 0.6);
+      t.seek(0);
+      const start = { e: getComputedStyle(document.getElementById('e')).opacity };
+      // the last motion ends at 1 s: 0.6 is 0.6 s
+      t.seek(0.6);
+      const c = getComputedStyle(document.getElementById('c'));
+      return { start, cOp: c.opacity, cY: parseFloat(c.translate.split(' ')[1] || '0'), dX: tx('d') };
+    });
+    check(tag('timeline: a later motion on another value keeps the first one’s end'), parseFloat(hand.cOp) < 0.01 && Math.abs(hand.cY - 50) < 1, JSON.stringify(hand));
+    check(tag('timeline: given only an end, it starts where the one before left off'), Math.abs(hand.dX - 200) < 1, JSON.stringify(hand));
+    check(tag('timeline: a fade in later on is hidden from the start'), parseFloat(hand.start.e) < 0.01, JSON.stringify(hand));
+
+    const played = await p.evaluate(async () => {
+      const S = window.Scrollwork;
+      let calls = 0;
+      let done = 0;
+      const t = S.timeline({ onComplete: () => done++ })
+        .add('#a', { x: [0, 40] }, { duration: 0.2 })
+        .call(() => calls++)
+        .add('#b', { x: [0, 40] }, { duration: 0.2 });
+      await t.finished;
+      const end = calls;
+      t.reverse();
+      await t.finished;
+      const tx = (id) => parseFloat((getComputedStyle(document.getElementById(id)).translate || '0').split(' ')[0]) || 0;
+      return { end, calls, done, a: tx('a'), b: tx('b') };
+    });
+    check(tag('timeline: plays to its end, calls on the way, and reverses to the start'), played.end === 1 && played.calls === 2 && played.done === 2 && played.a === 0 && played.b === 0, JSON.stringify(played));
+
+    const cancel = await p.evaluate(() => {
+      const S = window.Scrollwork;
+      const el = document.getElementById('w');
+      el.style.opacity = '0.8';
+      const t = S.timeline({ autoplay: false }).add('#w', { opacity: [0, 1], width: ['100px', '300px'] });
+      t.seek(0.5);
+      const mid = el.getAttribute('style');
+      t.cancel();
+      return { mid, after: el.getAttribute('style') };
+    });
+    check(tag('timeline: cancel gives the element back as it was'), cancel.after === 'opacity: 0.8;' && cancel.mid !== cancel.after, JSON.stringify(cancel));
+
+    const props = await p.evaluate(() => {
+      const S = window.Scrollwork;
+      const cs = (id) => getComputedStyle(document.getElementById(id));
+      const lin = { autoplay: false, ease: 'linear' };
+      S.animate('#w', { width: ['100px', '300px'] }, lin).seek(0.5);
+      S.animate('#w2', { width: '400px' }, lin).seek(0.5);
+      S.animate('#v', { '--size': [0, 100] }, lin).seek(0.5);
+      S.animate('#col', { backgroundColor: '#ffffff' }, lin).seek(0.5);
+      S.animate('#clip', { clipPath: ['inset(0px 0px 100% 0px)', 'inset(0px 0px 0% 0px)'] }, lin).seek(0.75);
+      return { w: cs('w').width, w2: cs('w2').width, v: document.getElementById('v').style.getPropertyValue('--size'), col: cs('col').backgroundColor, clip: cs('clip').clipPath };
+    });
+    check(tag('any property: a width, from its own when only an end is given'), props.w === '200px' && props.w2 === '300px', JSON.stringify(props));
+    check(tag('any property: a CSS variable'), props.v === '50', props.v);
+    check(tag('any property: a colour'), /^rgba?\(128, 128, 128(, 1)?\)$/.test(props.col), props.col);
+    check(tag('any property: a clip-path'), /inset\(0px 0px 25% 0px\)|inset\(0px 0px 25%\)/.test(props.clip), props.clip);
+
+    const obj = await p.evaluate(async () => {
+      const o = { value: 0, label: 'x' };
+      let updates = 0;
+      const a = window.Scrollwork.animate(o, { value: 1200 }, { duration: 0.2, onUpdate: () => updates++ });
+      await a.finished;
+      const end = o.value;
+      const b = window.Scrollwork.animate(o, { value: 0 }, { autoplay: false });
+      b.seek(0.5);
+      b.cancel();
+      return { end, updates, back: o.value };
+    });
+    check(tag('a plain object’s numbers move, and cancel puts them back'), obj.end === 1200 && obj.updates > 2 && obj.back === 1200, JSON.stringify(obj));
+
+    const restore = await p.evaluate(() => {
+      const el = document.getElementById('v');
+      const a = window.Scrollwork.animate('#v', { '--other': [0, 10], width: ['10px', '20px'] }, { autoplay: false });
+      a.seek(0.5);
+      a.cancel();
+      return { other: el.style.getPropertyValue('--other'), width: el.style.width };
+    });
+    check(tag('cancel removes the properties it wrote'), restore.other === '' && restore.width === '', JSON.stringify(restore));
+
+    const draw = await p.evaluate(() => {
+      const el = document.getElementById('line');
+      const a = window.Scrollwork.animate('#line', { draw: [0, 1] }, { autoplay: false, ease: 'linear' });
+      const off = () => parseFloat(getComputedStyle(el).strokeDashoffset);
+      a.seek(0);
+      const s0 = off();
+      a.seek(0.5);
+      const s5 = off();
+      a.seek(1);
+      const s1 = off();
+      a.cancel();
+      return { s0, s5, s1, dash: getComputedStyle(el).strokeDasharray, after: el.getAttribute('style') };
+    });
+    check(tag('draw: an SVG line is drawn from its start'), Math.abs(draw.s0 - 200) < 0.5 && Math.abs(draw.s5 - 100) < 0.5 && Math.abs(draw.s1) < 0.5, JSON.stringify(draw));
+    check(tag('draw: cancel leaves the line as it was'), draw.after === null, String(draw.after));
+    check(tag('no errors (1.14 timeline and properties)'), errors.length === 0, errors.join(' | '));
+    await ctx.close();
+  }
+
+  // ── 1.14: scroll() start and end anywhere, callbacks, smooth, snap ──
+  {
+    const body = `<div style="height:1500px"></div><div id="sec" style="height:400px;background:#eee">section</div><div style="height:3000px"></div>`;
+    const { p, ctx, errors } = await page(browser, body);
+    const go = async (y) => {
+      await p.evaluate((y) => window.scrollTo(0, y), y);
+      await sleep(120);
+    };
+    await p.evaluate(() => {
+      window.log = [];
+      window.raw = -1;
+      window.Scrollwork.scroll((v) => (window.raw = v), {
+        target: '#sec', start: 'top 80%', end: '+=400',
+        onEnter: () => log.push('enter'), onLeave: () => log.push('leave'), onEnterBack: () => log.push('enterBack'), onLeaveBack: () => log.push('leaveBack'),
+      });
+    });
+    // the view is 700 high: the section's top (1500) reaches 80% (560) at scroll 940
+    await go(940);
+    const p0 = await p.evaluate(() => window.raw);
+    await go(1140);
+    const p5 = await p.evaluate(() => window.raw);
+    await go(1600);
+    await go(1200);
+    await go(0);
+    const log = await p.evaluate(() => window.log.join(','));
+    check(tag('scroll: "top 80%" to "+=400"'), Math.abs(p0) < 0.01 && Math.abs(p5 - 0.5) < 0.01, JSON.stringify({ p0, p5 }));
+    check(tag('scroll: enter, leave, enter back, leave back'), log === 'enter,leave,enterBack,leaveBack', log);
+
+    await p.evaluate(() => {
+      window.soft = -1;
+      window.Scrollwork.scroll((v) => (window.soft = v), { target: '#sec', start: 'top top', end: 'bottom top', smooth: 0.5 });
+    });
+    await go(1500);
+    await p.evaluate(() => window.scrollTo(0, 1700));
+    await sleep(60);
+    const early = await p.evaluate(() => window.soft);
+    await sleep(900);
+    const late = await p.evaluate(() => window.soft);
+    check(tag('scroll: smooth catches up, softly'), early < 0.45 && Math.abs(late - 0.5) < 0.01, JSON.stringify({ early, late }));
+
+    await p.evaluate(() => {
+      window.Scrollwork.scroll(() => {}, { target: '#sec', start: 'top top', end: '+=400', snap: 0.5 });
+    });
+    await p.evaluate(() => window.scrollTo(0, 1500 + 130));
+    await sleep(1400);
+    const snapped = await p.evaluate(() => window.scrollY);
+    check(tag('scroll: snap glides to the nearest point once scrolling stops'), Math.abs(snapped - 1700) <= 2, String(snapped));
+
+    // a timeline scrubbed by the scroll
+    await p.evaluate(() => {
+      document.body.insertAdjacentHTML('beforeend', '<div id="t1" style="width:10px;height:10px"></div>');
+      const t = window.Scrollwork.timeline({ autoplay: false }).add('#t1', { x: [0, 100] }, { ease: 'linear', duration: 1 }).add('#t1', { y: [0, 100] }, { ease: 'linear', duration: 1 });
+      window.Scrollwork.scroll(t, { target: '#sec', start: 'top top', end: '+=400' });
+    });
+    await go(1500 + 300);
+    const tlScrub = await p.evaluate(() => getComputedStyle(document.getElementById('t1')).translate);
+    check(tag('scroll: scrubs a timeline'), /^100px 50px/.test(tlScrub), tlScrub);
+    check(tag('no errors (1.14 scroll)'), errors.length === 0, errors.join(' | '));
+    await ctx.close();
+
+    // reduced motion: no smoothing, a timeline shows its end
+    const r = await page(browser, body, { reduced: true });
+    await r.p.evaluate(() => {
+      window.soft = -1;
+      window.Scrollwork.scroll((v) => (window.soft = v), { target: '#sec', start: 'top top', end: 'bottom top', smooth: 2 });
+      document.body.insertAdjacentHTML('beforeend', '<div id="t2" style="width:10px;height:10px"></div>');
+      window.Scrollwork.timeline().add('#t2', { x: [0, 80] }, { duration: 3 });
+    });
+    await r.p.evaluate(() => window.scrollTo(0, 1700));
+    await sleep(150);
+    const rs = await r.p.evaluate(() => ({ soft: window.soft, t2: getComputedStyle(document.getElementById('t2')).translate }));
+    check(tag('reduced motion: scroll follows at once, a timeline is at its end'), Math.abs(rs.soft - 0.5) < 0.01 && /^80px/.test(rs.t2), JSON.stringify(rs));
+    await r.ctx.close();
+  }
+
+
+  // ── scrollwork/extras (1.14): flip, morph, follow, drag, sideways ──
+  {
+    const both = '<script src="/scrollwork.min.js"></script><script src="/scrollwork-extras.min.js"></script>';
+    const { p, ctx, errors } = await page(
+      browser,
+      `<style>#grid{display:flex;gap:10px;width:600px} #grid.col{flex-direction:column} .it{width:100px;height:40px;background:#ccc}</style>
+       <div id="grid"><div class="it" id="i1">1</div><div class="it" id="i2">2</div><div class="it" id="i3">3</div></div>
+       <svg id="svg" width="400" height="200" viewBox="0 0 400 200" style="display:block">
+         <path id="sq" d="M0 0 H100 V100 H0 Z"/><path id="route" d="M0 100 H300" stroke="black" fill="none"/><path id="diag" d="M0 0 L100 100" fill="none"/>
+       </svg>
+       <div id="dot" style="width:20px;height:20px;background:red"></div>`,
+      { script: both }
+    );
+    const flip = await p.evaluate(async () => {
+      const X = window.ScrollworkExtras;
+      const r = (id) => document.getElementById(id).getBoundingClientRect();
+      const before = { i2: r('i2'), i3: r('i3') };
+      const st = X.capture('#grid .it');
+      document.getElementById('grid').classList.add('col');
+      document.getElementById('grid').insertAdjacentHTML('beforeend', '<div class="it" id="i4">4</div>');
+      const after = { i2: r('i2'), i3: r('i3') };
+      const t = X.flip(st, { autoplay: false, ease: 'linear', duration: 1 });
+      await Promise.resolve();
+      t.seek(0);
+      const s0 = { i2: r('i2'), i3: r('i3'), i4: getComputedStyle(document.getElementById('i4')).opacity };
+      t.seek(1);
+      const s1 = { i2: r('i2'), i3: r('i3'), i4: getComputedStyle(document.getElementById('i4')).opacity };
+      const near = (a, b) => Math.abs(a.left - b.left) < 1 && Math.abs(a.top - b.top) < 1;
+      return { start: near(s0.i2, before.i2) && near(s0.i3, before.i3), end: near(s1.i2, after.i2) && near(s1.i3, after.i3), moved: !near(before.i3, after.i3), enter: [s0.i4, s1.i4] };
+    });
+    check(tag('flip: each element starts where it was and ends where it is'), flip.moved && flip.start && flip.end, JSON.stringify(flip));
+    check(tag('flip: one that was not there comes in'), parseFloat(flip.enter[0]) < 0.01 && flip.enter[1] === '1', JSON.stringify(flip.enter));
+
+    const morph = await p.evaluate(() => {
+      const X = window.ScrollworkExtras;
+      const el = document.getElementById('sq');
+      const tri = 'M50 0 L100 100 L0 100 Z';
+      const m = X.morph('#sq', tri, { autoplay: false, ease: 'linear' });
+      m.seek(0.5);
+      const mid = el.getAttribute('d');
+      const box = el.getBBox();
+      m.seek(1);
+      const end = el.getAttribute('d');
+      m.seek(0);
+      const start = el.getAttribute('d');
+      m.seek(0.5);
+      m.cancel();
+      return { points: (mid.match(/L/g) || []).length, closed: mid.endsWith('Z'), box: [box.width, box.height].map(Math.round), end, start, back: el.getAttribute('d') };
+    });
+    check(tag('morph: a square becomes a triangle, point by point'), morph.points > 100 && morph.closed && morph.box[0] >= 98 && morph.box[1] === 100, JSON.stringify(morph));
+    check(tag('morph: each end is its own path exactly, and cancel gives it back'), morph.end === 'M50 0 L100 100 L0 100 Z' && morph.start === 'M0 0 H100 V100 H0 Z' && morph.back === morph.start, JSON.stringify(morph));
+
+    const path = await p.evaluate(() => {
+      const S = window.Scrollwork;
+      const X = window.ScrollworkExtras;
+      const dot = document.getElementById('dot');
+      const a = S.animate(X.follow('#dot', '#route'), { progress: [0, 1] }, { autoplay: false, ease: 'linear' });
+      a.seek(0.5);
+      const half = getComputedStyle(dot).translate;
+      a.seek(0);
+      const rest = dot.style.translate;
+      const turned = S.animate(X.follow('#dot', '#diag', { rotate: true }), { progress: [0, 1] }, { autoplay: false, ease: 'linear' });
+      turned.seek(0.5);
+      const rot = getComputedStyle(dot).rotate;
+      turned.seek(0);
+      const al = S.animate(X.follow('#dot', '#route', { align: true }), { progress: [0, 1] }, { autoplay: false, ease: 'linear' });
+      al.seek(1);
+      const r = dot.getBoundingClientRect();
+      const svg = document.getElementById('svg').getBoundingClientRect();
+      return { half, rest, rot, centre: [Math.round(r.left + r.width / 2 - svg.left), Math.round(r.top + r.height / 2 - svg.top)] };
+    });
+    check(tag('follow: the element travels the path'), /^150px 0px$|^150px$/.test(path.half) && path.rest === '', JSON.stringify(path));
+    check(tag('follow: turning with it'), /^45deg$/.test(path.rot), path.rot);
+    check(tag('follow: align puts its centre on the path'), path.centre[0] === 300 && path.centre[1] === 100, JSON.stringify(path.centre));
+    check(tag('no errors (extras: flip, morph, follow)'), errors.length === 0, errors.join(' | '));
+    await ctx.close();
+  }
+
+  {
+    const body = `<div id="rail" style="position:relative;width:500px;height:60px;margin:40px;background:#eee"><div id="k" tabindex="0" style="width:100px;height:60px;background:#333"></div></div><button id="out">out</button>`;
+    const both = '<script src="/scrollwork.min.js"></script><script src="/scrollwork-extras.min.js"></script>';
+    const { p, ctx, errors } = await page(browser, body, { script: both });
+    await p.evaluate(() => {
+      window.clicks = 0;
+      document.getElementById('k').addEventListener('click', () => window.clicks++);
+      window.d = window.ScrollworkExtras.drag('#k', { axis: 'x', bounds: '#rail', snap: 100, inertia: false });
+    });
+    const k = await p.locator('#k').boundingBox();
+    const cx = k.x + 50;
+    const cy = k.y + 30;
+    const dragBy = async (dx, dy = 0, steps = 10, pause = 30) => {
+      await p.mouse.move(cx, cy);
+      await p.mouse.down();
+      for (let i = 1; i <= steps; i++) {
+        await p.mouse.move(cx + (dx * i) / steps, cy + (dy * i) / steps);
+        await sleep(pause);
+      }
+    };
+    await dragBy(130, 40);
+    await sleep(150);
+    await p.mouse.up();
+    await sleep(600);
+    const snapped = await p.evaluate(() => ({ x: window.d.x, y: window.d.y, t: document.getElementById('k').style.translate, clicks: window.clicks }));
+    check(tag('drag: along its axis only, landing on a snap point'), snapped.x === 100 && snapped.y === 0 && /^100px( 0px)?$/.test(snapped.t), JSON.stringify(snapped));
+    check(tag('drag: letting go is not a click'), snapped.clicks === 0, String(snapped.clicks));
+    await p.mouse.click(cx + 100, cy);
+    await sleep(100);
+    check(tag('drag: a plain click still clicks'), (await p.evaluate(() => window.clicks)) === 1);
+
+    // past the bounds it follows part of the way, then springs back to the edge
+    const from = await p.evaluate(() => window.d.x);
+    await p.mouse.move(cx + 100, cy);
+    await p.mouse.down();
+    for (let i = 1; i <= 10; i++) {
+      await p.mouse.move(cx + 100 + 60 * i, cy);
+      await sleep(20);
+    }
+    const over = await p.evaluate(() => window.d.x);
+    await sleep(150);
+    await p.mouse.up();
+    await sleep(700);
+    const edge = await p.evaluate(() => window.d.x);
+    check(tag('drag: past its bounds it resists, and rests at the edge'), from === 100 && over > 400 && over < 700 && edge === 400, JSON.stringify({ from, over, edge }));
+
+    // the keys
+    await p.focus('#k');
+    await p.keyboard.press('ArrowLeft');
+    await sleep(500);
+    const keyed = await p.evaluate(() => window.d.x);
+    check(tag('drag: the arrow keys move it to the next snap point'), keyed === 300, String(keyed));
+
+    // a throw
+    await p.evaluate(() => {
+      window.d.destroy();
+      window.t = window.ScrollworkExtras.drag('#k', { axis: 'x', bounds: '#rail' });
+    });
+    const back = await p.evaluate(() => document.getElementById('k').style.translate);
+    await dragBy(60, 0, 4, 8);
+    await p.mouse.up();
+    await sleep(1400);
+    const thrown = await p.evaluate(() => window.t.x);
+    check(tag('drag: destroy puts it back; a throw glides on past where it was let go'), back === '' && thrown > 120, JSON.stringify({ back, thrown }));
+    check(tag('no errors (extras: drag)'), errors.length === 0, errors.join(' | '));
+    await ctx.close();
+
+    // reduced motion: no throw
+    const r = await page(browser, body, { script: both, reduced: true });
+    await r.p.evaluate(() => (window.t = window.ScrollworkExtras.drag('#k', { axis: 'x', bounds: '#rail' })));
+    await r.p.mouse.move(cx, cy);
+    await r.p.mouse.down();
+    for (let i = 1; i <= 4; i++) {
+      await r.p.mouse.move(cx + 15 * i, cy);
+      await sleep(8);
+    }
+    await r.p.mouse.up();
+    await sleep(600);
+    const still = await r.p.evaluate(() => window.t.x);
+    check(tag('drag: under reduced motion it stops where it is let go'), Math.abs(still - 60) < 1, String(still));
+    await r.ctx.close();
+  }
+
+  {
+    const both = '<script src="/scrollwork.min.js"></script><script src="/scrollwork-extras.min.js"></script>';
+    const { p, ctx, errors } = await page(
+      browser,
+      `<style>.track{display:flex;width:max-content}.panel{flex:none;width:1000px;height:700px}</style>
+       <div style="height:600px">before</div>
+       <section id="work"><div class="track"><div class="panel">1</div><div class="panel">2</div><div class="panel" id="p3">3</div><div class="panel"><button id="last">last</button></div></div></section>
+       <div style="height:1500px">after</div>`,
+      { script: both }
+    );
+    const set = await p.evaluate(() => {
+      window.side = window.ScrollworkExtras.sideways('#work', { snap: 'panels' });
+      window.seen = -1;
+      window.side.watch('#p3', (v) => (window.seen = v), { range: 'in' });
+      return { h: document.getElementById('work').offsetHeight };
+    });
+    const top = 600;
+    await p.evaluate((y) => window.scrollTo(0, y), top + 1500);
+    await sleep(120);
+    const mid = await p.evaluate(() => ({ t: document.querySelector('.track').style.translate, top: Math.round(document.querySelector('.track').getBoundingClientRect().top), p: window.side.progress, seen: window.seen }));
+    check(tag('sideways: the section is as tall as the track takes, and the track moves with the scroll'), set.h === 3700 && /^-1500px( 0px)?$/.test(mid.t) && mid.top === 0, JSON.stringify({ set, mid }));
+    check(tag('sideways: watch follows a panel across the screen'), mid.seen > 0 && mid.seen < 1, String(mid.seen));
+    await p.evaluate((y) => window.scrollTo(0, y), top + 1200);
+    await sleep(1400);
+    const snapped = await p.evaluate(() => window.scrollY);
+    check(tag('sideways: snaps to a panel'), Math.abs(snapped - (top + 1000)) <= 2, String(snapped));
+    await p.evaluate(() => window.scrollTo(0, 0));
+    await sleep(100);
+    await p.focus('#last');
+    await sleep(150);
+    const shown = await p.evaluate(() => {
+      const r = document.getElementById('last').getBoundingClientRect();
+      return r.left >= 0 && r.right <= innerWidth && r.top >= 0 && r.bottom <= innerHeight;
+    });
+    check(tag('sideways: keyboard focus inside scrolls it into view'), shown);
+    const stopped = await p.evaluate(() => {
+      window.side.stop();
+      const s = document.getElementById('work');
+      return { style: s.getAttribute('style'), track: document.querySelector('.track').getAttribute('style') };
+    });
+    check(tag('sideways: stop puts the section back'), !stopped.style && !stopped.track, JSON.stringify(stopped));
+    check(tag('no errors (extras: sideways)'), errors.length === 0, errors.join(' | '));
+    await ctx.close();
+  }
+
+
+  // ── sideways in a centred, padded section: the track starts on the section's left and ends on its right ──
+  {
+    const both = '<script src="/scrollwork.min.js"></script><script src="/scrollwork-extras.min.js"></script>';
+    const { p, ctx, errors } = await page(
+      browser,
+      `<style>#c{display:flex;flex-direction:column;align-items:center;padding:80px 24px}.track{display:flex;width:max-content}.panel{flex:none;width:600px;height:500px}</style>
+       <div style="height:300px"></div><section id="c"><div class="track"><div class="panel" id="first">1</div><div class="panel">2</div><div class="panel" id="lastp">3</div></div></section><div style="height:1500px"></div>`,
+      { script: both }
+    );
+    const r = await p.evaluate(async () => {
+      const s = window.ScrollworkExtras.sideways('#c');
+      const sec = document.getElementById('c');
+      const docTop = sec.getBoundingClientRect().top + scrollY;
+      const at = async (y) => {
+        scrollTo(0, y);
+        await new Promise((r) => setTimeout(r, 120));
+        const sr = sec.getBoundingClientRect();
+        return { first: Math.round(document.getElementById('first').getBoundingClientRect().left - sr.left), last: Math.round(sr.right - document.getElementById('lastp').getBoundingClientRect().right), trackTop: Math.round(document.querySelector('#c .track').getBoundingClientRect().top), p: s.progress };
+      };
+      // the track reaches the top 80px (the padding) after the section does; it travels 1800 - 952 = 848px
+      const start = await at(docTop + 80);
+      const end = await at(docTop + 80 + 848);
+      return { start, end };
+    });
+    check(tag('sideways: a centred, padded section starts on its left edge'), r.start.first === 24 && r.start.p === 0 && r.start.trackTop === 0, JSON.stringify(r));
+    check(tag('sideways: and ends on its right edge, stuck all the way'), r.end.last === 24 && r.end.p === 1 && r.end.trackTop === 0, JSON.stringify(r));
+    check(tag('no errors (sideways, centred)'), errors.length === 0, errors.join(' | '));
+    await ctx.close();
+  }
+
+
+  // ── 1.14 in the spec: a corner reveal (a state's clip, a scroll's ease) and words lit as the page scrolls ──
+  {
+    const body = `<div style="height:1500px"></div><div id="r" data-m="r" style="width:400px;height:300px;background:#333"></div>
+      <div style="height:400px"></div><p id="w" data-m="w" style="font:20px sans-serif;width:600px">one two three four five</p><div style="height:2000px"></div>`;
+    const spec = {
+      items: [
+        { id: 'r', text: false, scroll: { from: { clip: { top: 100, right: 100 } }, to: {}, range: 'in', ease: 'ease-out-quad' } },
+        { id: 'w', text: true, scroll: { from: { opacity: 0.2 }, to: {}, range: 'in', split: 'words', spread: 0.2 } },
+      ],
+      smooth: false,
+    };
+    const run = async (reduced) => {
+      const { p, ctx, errors } = await page(browser, body, { reduced });
+      const before = await p.evaluate(() => document.getElementById('w').innerHTML);
+      await p.evaluate((spec) => (window.sw = window.Scrollwork.start(spec, { attr: 'data-m', root: document.body, scroller: null, reduced: matchMedia('(prefers-reduced-motion: reduce)').matches, split: true })), spec);
+      const at = async (y) => {
+        await p.evaluate((y) => window.scrollTo(0, y), y);
+        await sleep(150);
+        return p.evaluate(() => ({
+          clip: getComputedStyle(document.getElementById('r')).clipPath,
+          words: [...document.querySelectorAll('#w span')].filter((s) => /^(one|two|three|four|five)$/.test(s.textContent.trim()) && !s.querySelector('span')).map((s) => +(+getComputedStyle(s).opacity).toFixed(2)),
+        }));
+      };
+      // r: 1500 down, 300 high, a 700 view: 'in' runs from scroll 800 to 1300
+      const r0 = await at(700);
+      const r5 = await at(1050);
+      const r1 = await at(1400);
+      // w (about 24px high) at 2200: 'in' runs from 1500 to about 1862
+      const wTop = await p.evaluate(() => document.getElementById('w').getBoundingClientRect().top + scrollY);
+      const wH = await p.evaluate(() => document.getElementById('w').getBoundingClientRect().height);
+      const ws = wTop - 700;
+      const we = wTop + wH / 2 - 350;
+      const w5 = await at(ws + (we - ws) * 0.5);
+      const w0 = await at(ws - 50);
+      await p.evaluate(() => window.sw.stop());
+      const after = await p.evaluate(() => document.getElementById('w').innerHTML);
+      await ctx.close();
+      return { r0, r5, r1, w0, w5, restored: before === after, errors };
+    };
+    const m = await run(false);
+    check(tag('corner reveal: closed before, opening from the bottom-left on its curve, open after'), /inset\(100% 100% 0(%|px)? 0(%|px)?\)/.test(m.r0.clip) && ((c) => { const n = (c.match(/[\d.]+/g) || []).map(Number); return Math.abs(n[0] - 25) < 1 && Math.abs(n[1] - 25) < 1 && n[2] === 0 && n[3] === 0; })(m.r5.clip) && m.r1.clip === 'none', JSON.stringify([m.r0.clip, m.r5.clip, m.r1.clip]));
+    check(tag('words lit as the page scrolls, one after another'), m.w5.words.length === 5 && [1, 1, 0.6, 0.2, 0.2].every((v, i) => Math.abs(m.w5.words[i] - v) < 0.02) && m.w0.words.every((o) => o === 0.2), JSON.stringify({ w5: m.w5.words, w0: m.w0.words }));
+    check(tag('stop() gives the paragraph back as it was'), m.restored);
+    check(tag('no errors (reveal and lit words)'), m.errors.length === 0, m.errors.join(' | '));
+    const r = await run(true);
+    check(tag('reduced motion: the picture is open and the words are as they are'), r.r0.clip === 'none' && r.w5.words.every((o) => o === 1), JSON.stringify({ clip: r.r0.clip, words: r.w5.words }));
+  }
+
+
+  // ── 1.14 formations: a scroll split by children (Codrops' On-Scroll Layout Formations) ──
+  {
+    const body = `<style>#g{display:grid;grid-template-columns:repeat(3,100px);gap:20px;width:340px} #g div{width:100px;height:100px;background:#333}</style>
+      <div style="height:1500px"></div><div id="g" data-m="g">${'<div></div>'.repeat(9)}</div><div style="height:2500px"></div>`;
+    const run = async (reduced, sc) => {
+      const { p, ctx, errors } = await page(browser, body, { reduced });
+      const before = await p.evaluate(() => [...document.querySelectorAll('#g > div')].map((d) => d.getAttribute('style')));
+      await p.evaluate((sc) => (window.sw = window.Scrollwork.start({ items: [{ id: 'g', text: false, scroll: sc }], smooth: false }, { attr: 'data-m', root: document.body, scroller: null, reduced: matchMedia('(prefers-reduced-motion: reduce)').matches, split: true })), sc);
+      const at = async (y) => {
+        await p.evaluate((y) => window.scrollTo(0, y), y);
+        await sleep(150);
+        return p.evaluate(() => [...document.querySelectorAll('#g > div')].map((d) => {
+          const cs = getComputedStyle(d);
+          const t = (cs.translate === 'none' ? '0px 0px' : cs.translate).split(' ').map(parseFloat);
+          return { x: Math.round(t[0] || 0), y: Math.round(t[1] || 0), r: Math.round(parseFloat(cs.rotate) || 0), o: +(+cs.opacity).toFixed(2), origin: cs.transformOrigin };
+        }));
+      };
+      // #g: 1500 down, 340 high, a 700 view: 'in' runs from 800 to 1320
+      const s0 = await at(700);
+      const s5 = await at(1060);
+      const s1 = await at(1400);
+      await p.evaluate(() => window.sw.stop());
+      const after = await p.evaluate(() => [...document.querySelectorAll('#g > div')].map((d) => d.getAttribute('style')));
+      await ctx.close();
+      return { s0, s5, s1, restored: JSON.stringify(before) === JSON.stringify(after), errors };
+    };
+    const rise = await run(false, { split: 'children', from: { y: 600, opacity: 0 }, to: {}, range: 'in', spread: 0.3, order: 'center' });
+    check(tag('formation: every child starts below, unseen'), rise.s0.every((c) => c.y === 600 && c.o === 0), JSON.stringify(rise.s0.map((c) => c.y)));
+    check(tag('formation: from the centre, the centre child is ahead of the corners'), rise.s5[4].y < rise.s5[0].y && rise.s5[4].y < rise.s5[8].y, JSON.stringify(rise.s5.map((c) => c.y)));
+    check(tag('formation: all in place at the end'), rise.s1.every((c) => c.y === 0 && c.o === 1));
+    check(tag('formation: stop gives the children back as they were'), rise.restored);
+    const out = await run(false, { split: 'children', from: { x: 200, y: 200, rotate: 20 }, to: {}, range: 'in', outward: true, origin: 'top' });
+    const [tl, , , , mid, , , , br] = out.s0;
+    check(tag('outward: each child comes from its own side, turned as far as it is from the centre'), tl.x < 0 && tl.y < 0 && tl.r > 0 && br.x > 0 && br.y > 0 && br.r < 0 && mid.x === 0 && mid.y === 0 && mid.r === 0, JSON.stringify({ tl, mid, br }));
+    const fan = await run(false, { split: 'children', from: { y: 600, rotate: 20 }, to: {}, range: 'in', outward: true });
+    check(tag('outward with a start that only moves down: all rise from below, the turns open out from the centre'), fan.s0.every((c) => c.y === 600) && fan.s0[0].r > 0 && fan.s0[2].r < 0 && fan.s0[1].r === 0, JSON.stringify(fan.s0.map((c) => [c.y, c.r])));
+    check(tag('origin: the children turn about their top'), out.s0.every((c) => /^50px 0px/.test(c.origin)), out.s0[0].origin);
+    const v1 = await run(false, { split: 'children', from: { y: 500, rotate: 10 }, to: {}, range: 'in', vary: 0.5 });
+    const v2 = await run(false, { split: 'children', from: { y: 500, rotate: 10 }, to: {}, range: 'in', vary: 0.5 });
+    const ys = v1.s0.map((c) => c.y);
+    check(tag('vary: each child starts a little differently, the same each time'), new Set(ys).size > 4 && ys.every((y) => y >= 250 && y <= 750) && JSON.stringify(v1.s0) === JSON.stringify(v2.s0) && v1.s0.some((c) => c.r < 0), JSON.stringify(v1.s0.map((c) => [c.y, c.r])));
+    const r = await run(true, { split: 'children', from: { y: 600, opacity: 0 }, to: {}, range: 'in' });
+    check(tag('formation under reduced motion: the children in their places'), r.s0.every((c) => c.y === 0 && c.o === 1), JSON.stringify(r.s0.map((c) => c.y)));
+    check(tag('no errors (formations)'), [rise, out, v1, r].every((x) => x.errors.length === 0), [rise, out, v1, r].flatMap((x) => x.errors).join(' | '));
+  }
+
+
+  // ── 1.14 scramble: on hover, and as it comes into view (Codrops' Line Text Hover Animations) ──
+  {
+    const body = `<style>body{font:20px monospace}</style><a id="link" href="#x"><span id="t" data-m="t">Hello world</span></a>
+      <div style="height:1600px"></div><p id="v" data-m="v">Typed in on arrival</p><div style="height:800px"></div>`;
+    const spec = { items: [
+      { id: 't', text: true, rollover: [{ effect: 'scramble', duration: 0.4, stagger: 0.05, turns: 3, glyphs: '#', cursor: true, colors: ['rgb(255, 0, 0)'] }] },
+      { id: 'v', text: true, rollover: [{ effect: 'scramble', duration: 0.3, stagger: 0.03, turns: 3, on: 'appear' }] },
+    ], smooth: false };
+    const run = async (reduced) => {
+      const { p, ctx, errors } = await page(browser, body, { reduced });
+      const before = await p.evaluate(() => [document.getElementById('t').innerHTML, document.getElementById('v').innerHTML]);
+      await p.evaluate((spec) => (window.sw = window.Scrollwork.start(spec, { attr: 'data-m', root: document.body, scroller: null, reduced: matchMedia('(prefers-reduced-motion: reduce)').matches, split: true })), spec);
+      await sleep(100);
+      const letters = (id) => p.evaluate((id) => [...document.querySelectorAll(`#${id} .sw-scramble-char`)].map((c) => ({ ch: c.textContent, o: getComputedStyle(c).opacity, bg: c.style.backgroundColor, color: c.style.color, w: c.style.width })), id);
+      const a11y = await p.evaluate(() => ({ hidden: document.querySelector('#t .sw-scramble').getAttribute('aria-hidden'), said: document.querySelector('#t .sw-scramble-said')?.textContent }));
+      const w0 = await p.evaluate(() => document.getElementById('t').getBoundingClientRect().width);
+      const vBefore = await letters('v');
+      const box = await p.locator('#link').boundingBox();
+      await p.mouse.move(box.x + 5, box.y + box.height / 2);
+      await sleep(120);
+      const mid = await letters('t');
+      const w1 = await p.evaluate(() => document.getElementById('t').getBoundingClientRect().width);
+      await sleep(1200);
+      const end = await letters('t');
+      await p.evaluate(() => window.scrollTo(0, 1400));
+      await sleep(250);
+      const vMid = await letters('v');
+      await sleep(1200);
+      const vEnd = await letters('v');
+      await p.evaluate(() => window.sw.stop());
+      const after = await p.evaluate(() => [document.getElementById('t').innerHTML, document.getElementById('v').innerHTML]);
+      await ctx.close();
+      return { a11y, w0, w1, vBefore, mid, end, vMid, vEnd, restored: JSON.stringify(before) === JSON.stringify(after), errors };
+    };
+    const m = await run(false);
+    check(tag('scramble: a screen reader reads the words once, whole'), m.a11y.hidden === 'true' && m.a11y.said === 'Hello world', JSON.stringify(m.a11y));
+    check(tag('scramble on hover: letters flicker through the characters, with a cursor block and a colour'), m.mid.some((c) => c.ch === '#') && m.mid.some((c) => c.bg === 'currentcolor') && m.mid.some((c) => c.color === 'rgb(255, 0, 0)'), JSON.stringify(m.mid.slice(0, 5)));
+    check(tag('scramble: the line keeps its width while it flickers'), Math.abs(m.w0 - m.w1) < 1, JSON.stringify({ w0: m.w0, w1: m.w1 }));
+    check(tag('scramble: each letter lands on its own'), m.end.map((c) => c.ch).join('') === 'Helloworld' && m.end.every((c) => !c.bg && !c.color && !c.w), m.end.map((c) => c.ch).join(''));
+    check(tag('scramble as it comes into view: hidden until then, typed in, then its own'), m.vBefore.every((c) => c.o === '0') && m.vMid.some((c) => c.o === '1') && m.vEnd.map((c) => c.ch).join('') === 'Typedinonarrival' && m.vEnd.every((c) => c.o === '1'), JSON.stringify({ before: m.vBefore[0], mid: m.vMid.slice(0, 3), end: m.vEnd.map((c) => c.ch).join('') }));
+    check(tag('scramble: stop gives the words back as they were'), m.restored);
+    check(tag('no errors (scramble)'), m.errors.length === 0, m.errors.join(' | '));
+    const r = await run(true);
+    check(tag('scramble under reduced motion: nothing flickers, nothing is hidden'), r.mid.every((c) => c.ch !== '#') && r.vBefore.every((c) => c.o === '1'), JSON.stringify({ mid: r.mid.map((c) => c.ch).join(''), v: r.vBefore[0] }));
   }
 
   await browser.close();

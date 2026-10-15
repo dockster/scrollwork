@@ -6,7 +6,7 @@
 //     return () => a.reverse();   // on leaving
 //   });
 
-import { resolveTargets, type Targets } from './animate.js';
+import { resolveTargets, type Targets } from './tween.js';
 
 export interface InViewOptions {
   /** the scrolling box to watch within; the viewport when unset */

@@ -12,7 +12,7 @@ const dir = mkdtempSync(join(tmpdir(), 'scrollwork-unit-'));
 process.on('exit', () => rmSync(dir, { recursive: true, force: true }));
 const out = pathToFileURL(dir + '/');
 await build({
-  entryPoints: { easing: 'src/easing.ts', spec: 'src/spec.ts', animate: 'src/animate.ts', scroll: 'src/scroll.ts', vars: 'src/vars.ts', style: 'src/style.ts', fxspec: 'src/fx/spec.ts', fxsurface: 'src/fx/surface.ts' },
+  entryPoints: { rollover: 'src/rollover.ts', xdrag: 'src/extras/drag.ts', xmorph: 'src/extras/morph.ts', xside: 'src/extras/sideways.ts', props: 'src/props.ts', timeline: 'src/timeline.ts', tween: 'src/tween.ts', easing: 'src/easing.ts', spec: 'src/spec.ts', animate: 'src/animate.ts', scroll: 'src/scroll.ts', vars: 'src/vars.ts', style: 'src/style.ts', fxspec: 'src/fx/spec.ts', fxsurface: 'src/fx/surface.ts' },
   bundle: true,
   format: 'esm',
   platform: 'neutral',

@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Scrollwork: timeline, any property, draw, scroll</title>
+  <style>
+    :root { --ink: #16160f; --paper: #fffff7; --soft: rgba(22, 22, 15, 0.7); }
+    @media (prefers-color-scheme: dark) { :root { --ink: #f2f2ea; --paper: #16160f; --soft: rgba(242, 242, 234, 0.7); } }
+    body { margin: 0; font: 18px/1.5 system-ui, sans-serif; color: var(--ink); background: var(--paper); }
+    .hero { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; min-height: 100vh; padding: 0 24px; text-align: center; }
+    .hero h1 { margin: 0; font-size: clamp(40px, 8vw, 96px); line-height: 1; }
+    .hero p { margin: 0; max-width: 32ch; color: var(--soft); }
+    .hero .line { width: min(480px, 80vw); height: 24px; }
+    .hero .line path { stroke: var(--ink); stroke-width: 2; fill: none; }
+    .stats { display: flex; justify-content: center; gap: 48px; padding: 0 24px 40vh; font-size: 40px; font-weight: 700; }
+    .story { height: 300vh; }
+    .stage { position: sticky; top: 0; display: flex; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
+    .panel { display: flex; align-items: center; justify-content: center; width: 40%; height: 50vh; border-radius: 24px; background: var(--ink); color: var(--paper); font-size: 24px; box-shadow: 0 0 0 rgba(0, 0, 0, 0); }
+    .steps { position: absolute; bottom: 32px; display: flex; gap: 8px; }
+    .steps span { width: 8px; height: 8px; border-radius: 50%; background: var(--ink); }
+    .end { display: flex; align-items: center; justify-content: center; height: 60vh; color: var(--soft); }
+    @media (max-width: 768px) { .stats { gap: 24px; font-size: 28px; } .panel { width: 80%; } }
+  </style>
+</head>
+<body>
+  <section class="hero">
+    <h1>Design it. Ship it.</h1>
+    <p>A timeline plays the title, the line and these words one after another.</p>
+    <svg class="line" viewBox="0 0 480 24" aria-hidden="true"><path d="M0 12 C120 -8 360 32 480 12" /></svg>
+  </section>
+  <div class="stats"><span class="stat" data-to="1200">0</span><span class="stat" data-to="98">0</span><span class="stat" data-to="24">0</span></div>
+  <section class="story">
+    <div class="stage">
+      <div class="panel">Scrubbed by the scroll</div>
+      <div class="steps"><span></span><span></span><span></span><span></span><span></span></div>
+    </div>
+  </section>
+  <div class="end">The end</div>
+  <!-- After `npm run build`; or use https://cdn.jsdelivr.net/npm/scrollwork@1/dist/scrollwork.min.js -->
+  <script src="../dist/scrollwork.min.js"></script>
+  <script>
+    const { animate, timeline, inView, scroll } = Scrollwork;
+
+    // the hero: a timeline, the line drawn while the words come in
+    timeline({ defaults: { duration: 0.8, ease: 'expo' } })
+      .add('.hero h1', { y: [48, 0], opacity: [0, 1], blur: [8, 0] })
+      .add('.hero .line path', { draw: [0, 1] }, { duration: 1.2, ease: 'in-out' }, '-=0.4')
+      .add('.hero p', { y: [16, 0], opacity: [0, 1] }, {}, '<0.3');
+
+    // numbers that count up when they arrive: a plain object's value
+    inView('.stats', () => {
+      document.querySelectorAll('.stat').forEach((el, i) => {
+        const n = { v: 0 };
+        animate(n, { v: Number(el.dataset.to) }, { duration: 1.4, delay: i * 0.1, ease: 'expo', onUpdate: () => (el.textContent = Math.round(n.v)) });
+      });
+    }, { once: true });
+
+    // the story: a scrubbed timeline over a pinned stage, any property, snapping to its steps
+    const story = timeline({ autoplay: false, defaults: { ease: 'in-out', duration: 1 } })
+      .add('.panel', { width: ['40%', '90%'], borderRadius: ['24px', '4px'] })
+      .add('.panel', { backgroundColor: '#6c4dff', boxShadow: '0 40px 80px rgba(108, 77, 255, 0.5)' })
+      .add('.panel', { rotateY: [0, 12], scale: [1, 0.9] })
+      // motion opacity multiplies the element's own: the dots' own is 1, and the timeline dims them from the start
+      .add('.steps span', { opacity: [0.3, 1] }, { stagger: 0.7, duration: 0.2 }, 0);
+    scroll(story, { target: '.story', start: 'top top', end: 'bottom bottom', smooth: 0.3, snap: [0, 1 / 3, 2 / 3, 1] });
+  </script>
+</body>
+</html>

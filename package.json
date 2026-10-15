@@ -1,7 +1,7 @@
 {
   "name": "scrollwork",
-  "version": "1.13.2",
-  "description": "Scroll, appear, pin and interaction motion for the web, from JSON or data attributes, plus animate(), inView() and scroll(). A few KB, no dependencies, respects reduced motion.",
+  "version": "1.14.0",
+  "description": "Scroll, appear, pin and interaction motion for the web, from JSON or data attributes, plus animate(), timeline(), inView() and scroll(). No dependencies, respects reduced motion.",
   "type": "module",
   "main": "./dist/scrollwork.mjs",
   "module": "./dist/scrollwork.mjs",
@@ -29,6 +29,17 @@
     "./fx/global.min": {
       "default": "./dist/scrollwork-fx.min.js"
     },
+    "./extras": {
+      "types": "./dist/extras/index.d.ts",
+      "import": "./dist/extras.mjs",
+      "default": "./dist/extras.mjs"
+    },
+    "./extras/global": {
+      "default": "./dist/scrollwork-extras.js"
+    },
+    "./extras/global.min": {
+      "default": "./dist/scrollwork-extras.min.js"
+    },
     "./package.json": "./package.json"
   },
   "unpkg": "./dist/scrollwork.min.js",
@@ -44,7 +55,9 @@
     "./dist/scrollwork.js",
     "./dist/scrollwork.min.js",
     "./dist/scrollwork-fx.js",
-    "./dist/scrollwork-fx.min.js"
+    "./dist/scrollwork-fx.min.js",
+    "./dist/scrollwork-extras.js",
+    "./dist/scrollwork-extras.min.js"
   ],
   "scripts": {
     "build": "node scripts/build.mjs",
@@ -62,9 +75,14 @@
     "parallax",
     "motion",
     "scrolltrigger",
+    "timeline",
     "in-view",
     "reduced-motion",
-    "vanilla"
+    "vanilla",
+    "flip",
+    "morph",
+    "draggable",
+    "motion-path"
   ],
   "author": "uxspot.io",
   "license": "MIT",

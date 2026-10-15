@@ -11,6 +11,9 @@ import type { AppearMotion, FxSpec, LoopMotion, Interaction, InteractionAnimatio
 export const EASES: readonly MotionEase[] = ['smooth', 'out', 'in-out', 'expo', 'back', 'linear', 'in', 'in-back', 'in-out-back', ...EASINGS];
 const EFFECTS = ['fade', 'slide-up', 'mask', 'blur', 'scale', 'custom', 'roll'] as const;
 const SPLITS = ['none', 'lines', 'words', 'chars'] as const;
+const SCROLL_SPLITS = [...SPLITS, 'children'] as const;
+const ORDERS = ['start', 'end', 'center', 'edges', 'random'] as const;
+const ORIGINS = ['center', 'top', 'bottom', 'left', 'right'] as const;
 const RANGES = ['through', 'in', 'out', 'hold'] as const;
 const TRIGGERS = ['none', 'click', 'drag', 'hover', 'press', 'key', 'mouseenter', 'mouseleave', 'mousedown', 'mouseup', 'delay', 'media-end', 'media-time'] as const;
 const ACTIONS = ['none', 'navigate', 'change', 'back', 'scroll', 'url', 'overlay', 'swap', 'close', 'custom'] as const;
@@ -78,6 +81,16 @@ export const state = (v: unknown, notes: Notes, what: string, base: Partial<Moti
   if (ink) out.ink = ink;
   const image = picture(s.image ?? b.image, notes, what + '.image');
   if (image) out.image = image;
+  if (isObj(s.clip) || isObj(b.clip)) {
+    const c = (isObj(s.clip) ? s.clip : b.clip) as Record<string, unknown>;
+    const side = (k: string) => (c[k] === undefined ? undefined : num(c[k], 0, notes, what + '.clip.' + k, 0, 100));
+    const clip: NonNullable<MotionState['clip']> = {};
+    for (const k of ['top', 'right', 'bottom', 'left'] as const) {
+      const v = side(k);
+      if (v) clip[k] = v;
+    }
+    if (Object.keys(clip).length) out.clip = clip;
+  } else if (s.clip !== undefined) notes.add(`${what}.clip: expected an object like {"top": 100, "right": 100}`);
   return out;
 };
 /** a CSS colour as written (a name, hex, rgb(), oklch()…): letters, digits, # ( ) , . % and spaces, nothing that could end a declaration */
@@ -166,6 +179,14 @@ export function readScroll(v: unknown, notes: Notes, what: string): ScrollMotion
     range: oneOf(s.range, RANGES, 'through', notes, what + '.range'),
     keys: keys(s.keys, notes, what + '.keys'),
     trigger: typeof s.trigger === 'string' ? s.trigger : undefined,
+    // only when given, so a scroll reads back as it was written
+    ...(s.ease !== undefined ? { ease: oneOf(s.ease, EASES, 'linear', notes, what + '.ease') } : {}),
+    ...(s.split !== undefined && s.split !== 'none' ? { split: oneOf(s.split, SCROLL_SPLITS, 'none', notes, what + '.split') } : {}),
+    ...(s.spread !== undefined ? { spread: num(s.spread, 0.3, notes, what + '.spread', 0.05, 1) } : {}),
+    ...(s.order !== undefined ? { order: oneOf(s.order, ORDERS, 'start', notes, what + '.order') } : {}),
+    ...(s.outward === true ? { outward: true } : {}),
+    ...(s.vary !== undefined ? { vary: num(s.vary, 0, notes, what + '.vary', 0, 1) } : {}),
+    ...(s.origin !== undefined ? { origin: oneOf(s.origin, ORIGINS, 'center', notes, what + '.origin') } : {}),
   };
 }
 
@@ -227,6 +248,8 @@ export function readAnimation(v: unknown, notes: Notes, what: string, duration =
     duration: num(a.duration, duration, notes, what + '.duration', 0),
     ...(typeof a.transition === 'string' ? { transition: a.transition as InteractionAnimation['transition'] } : {}),
     ...(typeof a.direction === 'string' ? { direction: a.direction as InteractionAnimation['direction'] } : {}),
+    // a curtain's colour goes into a CSS variable: a plain hex colour or nothing
+    ...(typeof a.cover === 'string' && /^#[0-9a-f]{6}$/i.test(a.cover) ? { cover: a.cover } : {}),
   };
 }
 
@@ -289,6 +312,8 @@ export function readInteraction(v: unknown, notes: Notes, what: string, i: numbe
 export const ROLLOVER_DEFAULTS = {
   roll: { direction: 'up', duration: 0.2, stagger: 0.02, ease: 'ease-in-out-quad' },
   wipe: { direction: 'right', duration: 0.8, stagger: 0, ease: 'out' },
+  // each letter flickers for a quarter of a second, the next one 0.05 s after (Codrops' Line Text Hover Animations)
+  scramble: { direction: 'right', duration: 0.25, stagger: 0.05, ease: 'linear' },
 } as const;
 
 export function readRollover(v: unknown, notes: Notes, what: string): RolloverMotion | undefined {
@@ -297,20 +322,35 @@ export function readRollover(v: unknown, notes: Notes, what: string): RolloverMo
     notes.add(`${what}: expected an object like {"effect": "roll"} or {"effect": "wipe", "color": "#A6F4C5"}`);
     return undefined;
   }
-  const effect = oneOf(v.effect, ['roll', 'wipe'] as const, 'roll', notes, what + '.effect');
+  const effect = oneOf(v.effect, ['roll', 'wipe', 'scramble'] as const, 'roll', notes, what + '.effect');
   const d = ROLLOVER_DEFAULTS[effect];
   const dirs = effect === 'roll' ? (['up', 'down'] as const) : (['left', 'right', 'up', 'down', 'center'] as const);
   const out: RolloverMotion = {
     effect,
     direction: oneOf(v.direction, dirs as readonly RolloverMotion['direction'][], d.direction, notes, what + '.direction'),
     duration: num(v.duration, d.duration, notes, what + '.duration', 0, 5),
-    stagger: effect === 'roll' ? num(v.stagger, d.stagger, notes, what + '.stagger', 0, 0.5) : 0,
+    stagger: effect !== 'wipe' ? num(v.stagger, d.stagger, notes, what + '.stagger', 0, 0.5) : 0,
     ease: oneOf(v.ease, EASES, d.ease as MotionEase, notes, what + '.ease'),
   };
   if (effect === 'wipe') {
     if (typeof v.color === 'string' && v.color.trim()) out.color = v.color.trim();
     else notes.add(`${what}.color: a wipe needs the colour that sweeps across`);
     if (typeof v.ink === 'string' && v.ink.trim()) out.ink = v.ink.trim();
+  }
+  if (effect === 'scramble') {
+    out.turns = Math.round(num(v.turns, 3, notes, what + '.turns', 1, 10));
+    // the characters, as written: a few dozen at most, no line breaks (they are only ever text)
+    if (typeof v.glyphs === 'string') {
+      const g = Array.from(v.glyphs.replace(/[\u0000-\u001f\u007f\s]/g, '')).slice(0, 80).join('');
+      if (g) out.glyphs = g;
+      else notes.add(`${what}.glyphs: expected some characters to draw from`);
+    }
+    if (v.cursor === true) out.cursor = true;
+    if (Array.isArray(v.colors)) {
+      const cs = v.colors.slice(0, 6).map((c, n) => colour(c, notes, `${what}.colors[${n}]`)).filter((c): c is string => !!c);
+      if (cs.length) out.colors = cs;
+    }
+    out.on = oneOf(v.on, ['hover', 'appear', 'both'] as const, 'hover', notes, what + '.on');
   }
   if (typeof v.trigger === 'string' && v.trigger) out.trigger = v.trigger;
   return out;
@@ -347,6 +387,8 @@ export function readItem(v: unknown, notes: Notes, i: number): MotionItem | null
       const ro = readRollover(r, notes, Array.isArray(v.rollover) ? `${what}.rollover[${n}]` : `${what}.rollover`);
       if (!ro) return;
       if (ros.some((x) => x.effect === ro.effect)) notes.add(`${what}.rollover: a second ${ro.effect}, left out (one of each)`);
+      // a roll and a scramble both take the letters: the first one written keeps them
+      else if ((ro.effect === 'roll' && ros.some((x) => x.effect === 'scramble')) || (ro.effect === 'scramble' && ros.some((x) => x.effect === 'roll'))) notes.add(`${what}.rollover: a ${ro.effect} with a ${ro.effect === 'roll' ? 'scramble' : 'roll'}, left out (both move the letters)`);
       else ros.push(ro);
     });
     if (ros.length) item.rollover = ros;
