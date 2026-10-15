@@ -1880,6 +1880,27 @@ for (const name of BROWSERS) {
   }
 
 
+  // ── a custom cursor inside a screen centred in a wider window (a published page wider than its design) ──
+  {
+    const body = `<style>body{margin:0}</style><div id="screen" style="position:relative;width:600px;height:500px;margin:40px auto;border:3px solid #000">
+      <div id="dot" data-m="dot" style="position:absolute;left:100px;top:100px;width:20px;height:20px;background:red"></div><a id="go" href="#g" style="position:absolute;left:300px;top:300px">Go</a></div>`;
+    const { p, ctx, errors } = await page(browser, body);
+    await p.evaluate(() => (window.sw = window.Scrollwork.start({ items: [{ id: 'dot', cursor: { lag: 0, hide: true } }], smooth: false }, { attr: 'data-m', root: document.body, scroller: null, reduced: false })));
+    await sleep(100);
+    const at = async (x, y) => {
+      await p.mouse.move(x - 30, y - 30);
+      await p.mouse.move(x, y, { steps: 4 });
+      await sleep(200);
+      return p.evaluate(() => { const r = document.getElementById('dot').getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; });
+    };
+    const a = await at(700, 300);
+    const b = await at(420, 480);
+    await p.evaluate(() => window.sw.stop());
+    await ctx.close();
+    check(tag('cursor: centred on the pointer when its screen sits in a wider window, border and all'), [[a, 700, 300], [b, 420, 480]].every(([c, x, y]) => Math.abs(c.x - x) < 1.5 && Math.abs(c.y - y) < 1.5), JSON.stringify({ a, b }));
+    check(tag('no errors (cursor in a centred screen)'), errors.length === 0, errors.join(' | '));
+  }
+
   // ── 1.14 scramble: on hover, and as it comes into view (Codrops' Line Text Hover Animations) ──
   {
     const body = `<style>body{font:20px monospace}</style><a id="link" href="#x"><span id="t" data-m="t">Hello world</span></a>

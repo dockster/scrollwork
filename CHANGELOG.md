@@ -1,6 +1,13 @@
 # Changelog
 
-## 1.14.0 (unreleased)
+## 1.14.1
+
+- A custom cursor sits on the pointer when the element it moves in is not the root: a
+  screen centred in a wider window (a published page wider than its design) put it
+  off to the side by the margin. It is now placed in the px of its own offset parent,
+  inside that box's border.
+
+## 1.14.0
 
 - `TransitionType` takes `curtain`: a screen change its host plays with a panel
   of one colour passing between the two screens; an interaction's animation

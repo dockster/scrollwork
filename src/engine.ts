@@ -514,8 +514,6 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
     on(win, 'pointermove', (ev) => {
       const p = ev as PointerEvent;
       if (p.pointerType === 'touch') return;
-      const r = root.getBoundingClientRect();
-      const z = root.offsetWidth ? r.width / root.offsetWidth : 1;
       const t = p.target as Element | null;
       const at = (sel: string) => !!t && typeof t.closest === 'function' && !!t.closest(sel);
       // the page's cursor comes back over a field being typed in
@@ -529,8 +527,13 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
         const c = e.cur!;
         c.w = e.el.offsetWidth;
         c.h = e.el.offsetHeight;
-        c.tx = (p.clientX - r.left) / z - c.w / 2;
-        c.ty = (p.clientY - r.top) / z - c.h / 2;
+        // in the px of the box it is placed in (its offset parent, often a centred screen inside the
+        // root, not the root itself), from the inside of that box's border, scaled as the box is
+        const box = (e.el.offsetParent as HTMLElement | null) ?? root;
+        const r = box.getBoundingClientRect();
+        const z = box.offsetWidth ? r.width / box.offsetWidth : 1;
+        c.tx = (p.clientX - r.left) / z - box.clientLeft - c.w / 2;
+        c.ty = (p.clientY - r.top) / z - box.clientTop - c.h / 2;
         if (!c.seen) {
           c.seen = true;
           c.x = c.tx;
