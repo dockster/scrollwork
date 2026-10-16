@@ -64,6 +64,11 @@ Follows the scroll position.
 | `keys` | none | steps between them |
 | `range` | `"through"` | `through`: entering to leaving. `in`: until centred. `out`: centred to leaving. `hold`: a pinned element's own hold, caught to let go (`through` when it is not pinned) |
 | `trigger` | the element | another element whose passage drives it; a pinned trigger drives it across its hold |
+| `split` | none | the pieces `from` and `to` apply to in turn: a text's `lines`, `words` or `chars`; `children`, each element inside (a formation, with `order`, `outward`, `vary`, `origin`); or `slices` (1.15) |
+| `slices` | `4` | slices: how many vertical slices a one-line text is cut into, 2 to 12. Each shows its strip of a copy of the words, so together they read as the text (after Codrops' Sliced Text Effect, MIT; see [THIRD-PARTY.md](THIRD-PARTY.md)). The pieces take `order`, `outward` and `vary` as a formation's do; `outward` parts the copies from the centre, the middle slices furthest, and sends a vertical start up and down in turn. A screen reader reads the words once, from a copy only it sees. Sizes are in em, so the slices follow the text's size at every width |
+| `whole` | `false` | slices: the slices move whole, as strips; otherwise the words move inside slices that stay in place |
+| `order`, `outward`, `vary`, `origin` | `start`, off, `0`, `center` | children, slices, and (1.15) a text's `words` or `chars`: which piece goes first (`start`, `end`, `center`, `edges`, `random`); each starting away from the centre on its side (a text's pieces on one axis as far as each is from the centre); how much each start differs (a text's pieces may also move the other way, scattering); the point each turns about (`top`, `bottom`, `left`, `right`, or `behind`, 1em behind it in depth) |
+| `mask` | none | (1.15) a text's lines, words or letters: each starts out of its own box on this side (`top`, `bottom`, `left`, `right`), hidden by it, and slides into view; letters each get a box of their own. On top of `from` |
 
 ## loop
 
@@ -369,6 +374,36 @@ defaults), `{"grid": 607, "mouse": 0.11, "strength": 0.36, "relaxation":
 and 4). A picture effect, read as `glitch` reads it (its `background-image`,
 with CORS). The offsets are an RG32F texture, sampled nearest, which WebGL2
 reads without an extension. Under reduced motion the picture shows as it is.
+
+### bulge
+
+A bulge (1.15.0), after Codrops' 3D Bulge Text Effect (MIT, © Codrops; see
+[THIRD-PARTY.md](THIRD-PARTY.md)). Around the pointer the picture swells
+towards the eye: a dome that magnifies what is under it, falling off to
+nothing at its rim, lit from the top left. The dome follows the pointer a
+little behind. At rest the element is itself and nothing draws.
+
+On an element with no background picture and words in it (a heading), the
+words are its picture: each word is drawn where the page laid it out, in its
+own element's font, weight, size, colour, letter spacing and case, once the
+page's fonts have loaded, and again when the element changes size. While the
+bulge is drawn the element's own words are made transparent
+(`-webkit-text-fill-color`, class `ux-motion-fx-text`); they stay in the page
+for screen readers, selection and search, and show again as it settles. The
+dome swells inside the element's box only: give a heading room around its
+words. A text element's effect follows the pointer over its box even when its
+words take no pointer events of their own.
+
+| Field | Default | |
+|---|---|---|
+| `on` | `"hover"` | `hover`, the pointer while it is over the element (or a slow sweep while it has keyboard focus); `appear`, `always` and `scroll` swell it along the sweep |
+| `intensity` | `1` | multiplies `strength` |
+| `speed` | `1` | the sweep's pace |
+| `reach` | `0.2` | the dome's radius, a fraction of the element's width, 0.02 to 1 |
+| `strength` | `0.6` | how far it magnifies, 0 to 1 |
+| `shade` | `0.5` | how much its slopes are lit and shaded, 0 to 1 |
+| `trail` | `0.5` | seconds the dome takes to catch up with the pointer, 0 to 5 |
+| `in`, `out` | `0.3`, `0.6` | seconds for the hover to come in and go out |
 
 ### Playing an effect on demand
 

@@ -69,7 +69,25 @@ export interface DistortFx extends FxBase {
   relaxation: number;
 }
 
-export type Fx = GlitchFx | DitherFx | DistortFx;
+/**
+ * A bulge (after Codrops' 3D Bulge Text Effect, MIT): the picture, or the
+ * element's text, swells towards the eye around the pointer, magnified under
+ * a dome that is lit from the top left. The dome follows the pointer a little
+ * behind. On a text element its words are drawn into the picture it bulges.
+ */
+export interface BulgeFx extends FxBase {
+  type: 'bulge';
+  /** the dome's radius, as a fraction of the element's width: 0.02 to 1 */
+  reach: number;
+  /** how far it magnifies, 0 to 1 (times intensity) */
+  strength: number;
+  /** how much the dome's slopes are lit and shaded, 0 to 1 */
+  shade: number;
+  /** seconds the dome takes to catch up with the pointer */
+  trail: number;
+}
+
+export type Fx = GlitchFx | DitherFx | DistortFx | BulgeFx;
 export type FxType = Fx['type'];
 
 /** The picture an effect reads: the host's own, found at mount */

@@ -40,7 +40,7 @@ test('an effect this build does not play is left out and named, the rest stay in
   assert.equal(list.length, 2);
   assert.equal(list[0].on, 'always');
   assert.equal(list[1].on, 'hover');
-  assert.match(out[0], /items\[3\]\.fx\[1\]: "sparkle" is not an effect this build of scrollwork\/fx plays \(glitch, dither, distort\)/);
+  assert.match(out[0], /items\[3\]\.fx\[1\]: "sparkle" is not an effect this build of scrollwork\/fx plays \(glitch, dither, distort, bulge\)/);
 });
 
 test('something that is not an effect at all is said', () => {
@@ -215,3 +215,12 @@ test('driven by the sweep, the grid keeps moving and never settles; undriven, it
   assert.equal(d.settled, true);
 });
 
+
+test('a bulge: its defaults, and its reach, strength, shade and trail kept within range', () => {
+  const notes = [];
+  const [b] = readFx([{ type: 'bulge' }], (m) => notes.push(m), 'items');
+  assert.deepEqual({ on: b.on, reach: b.reach, strength: b.strength, shade: b.shade, trail: b.trail }, { on: 'hover', reach: 0.2, strength: 0.6, shade: 0.5, trail: 0.5 });
+  const [far] = readFx([{ type: 'bulge', reach: 3, strength: -1, shade: 9, trail: 50 }], (m) => notes.push(m), 'items');
+  assert.deepEqual([far.reach, far.strength, far.shade, far.trail], [1, 0, 1, 5]);
+  assert.equal(notes.length, 4);
+});

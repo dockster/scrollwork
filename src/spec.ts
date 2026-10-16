@@ -11,9 +11,10 @@ import type { AppearMotion, FxSpec, LoopMotion, Interaction, InteractionAnimatio
 export const EASES: readonly MotionEase[] = ['smooth', 'out', 'in-out', 'expo', 'back', 'linear', 'in', 'in-back', 'in-out-back', ...EASINGS];
 const EFFECTS = ['fade', 'slide-up', 'mask', 'blur', 'scale', 'custom', 'roll'] as const;
 const SPLITS = ['none', 'lines', 'words', 'chars'] as const;
-const SCROLL_SPLITS = [...SPLITS, 'children'] as const;
+const SCROLL_SPLITS = [...SPLITS, 'children', 'slices'] as const;
 const ORDERS = ['start', 'end', 'center', 'edges', 'random'] as const;
-const ORIGINS = ['center', 'top', 'bottom', 'left', 'right'] as const;
+const ORIGINS = ['center', 'top', 'bottom', 'left', 'right', 'behind'] as const;
+const MASKS = ['top', 'bottom', 'left', 'right'] as const;
 const RANGES = ['through', 'in', 'out', 'hold'] as const;
 const TRIGGERS = ['none', 'click', 'drag', 'hover', 'press', 'key', 'mouseenter', 'mouseleave', 'mousedown', 'mouseup', 'delay', 'media-end', 'media-time'] as const;
 const ACTIONS = ['none', 'navigate', 'change', 'back', 'scroll', 'url', 'overlay', 'swap', 'close', 'custom'] as const;
@@ -187,6 +188,9 @@ export function readScroll(v: unknown, notes: Notes, what: string): ScrollMotion
     ...(s.outward === true ? { outward: true } : {}),
     ...(s.vary !== undefined ? { vary: num(s.vary, 0, notes, what + '.vary', 0, 1) } : {}),
     ...(s.origin !== undefined ? { origin: oneOf(s.origin, ORIGINS, 'center', notes, what + '.origin') } : {}),
+    ...(s.slices !== undefined ? { slices: Math.round(num(s.slices, 4, notes, what + '.slices', 2, 12)) } : {}),
+    ...(s.whole === true ? { whole: true } : {}),
+    ...(s.mask !== undefined ? { mask: oneOf(s.mask, MASKS, 'bottom', notes, what + '.mask') } : {}),
   };
 }
 

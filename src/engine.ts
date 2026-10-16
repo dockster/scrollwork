@@ -36,7 +36,11 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
     /** the pieces are a scroll's, not an appear's */
     scrollUnits: boolean;
     /** a scroll split by children: each child with its own look, its start, and its turn */
-    formation: Array<{ el: HTMLElement; base: Base; from: State; rank: number; origin: string }> | null;
+    formation: Array<{ el: HTMLElement; base: Base; from: State; rank: number; origin: string; at?: HTMLElement }> | null;
+    /** cut into slices (scroll split `slices`): the inner pieces are spread the most and a vertical start alternates */
+    sliced?: boolean;
+    /** a text's words or letters moving as a formation: a start along one axis spreads as far as each is from the centre */
+    pieces?: boolean;
     top: number;
     height: number;
     /** the parent's box, for a parallax that keeps covering it */
@@ -127,7 +131,7 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
 
   // ── text split: every text node becomes spans, and goes back on stop ──
   const restores: Array<() => void> = [];
-  const split = (el: HTMLElement, by: 'lines' | 'words' | 'chars', mask: boolean, turns = -1): Unit[] => {
+  const split = (el: HTMLElement, by: 'lines' | 'words' | 'chars', mask: boolean, turns = -1, each = false): Unit[] => {
     const roll = turns >= 0;
     const doc = el.ownerDocument;
     // A screen reader reads the pieces one by one ("H, e, l, l, o"). The
@@ -212,7 +216,17 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
               continue;
             }
             c.textContent = ch;
-            holder.appendChild(c);
+            if (each) {
+              // a letter sliding out of its own box: each in a mask of its own
+              const box = inline('ux-motion-charbox');
+              box.style.overflow = 'hidden';
+              box.style.overflow = 'clip';
+              box.style.verticalAlign = 'top';
+              box.style.paddingBottom = '0.12em';
+              box.style.marginBottom = '-0.12em';
+              box.appendChild(c);
+              holder.appendChild(box);
+            } else holder.appendChild(c);
             units.push({ el: c, index: units.length });
           }
         } else {
@@ -243,6 +257,56 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
     if (by === 'lines') group(units);
     return units;
   };
+  /**
+   * A one-line text cut into `n` slices (after Codrops' Sliced Text Effect,
+   * MIT): each is a box a slice of the text's width wide that clips a copy of
+   * the whole text, moved left by its place, so side by side they read as the
+   * text. Sizes are in em, so they follow the text's size at every width. A
+   * screen reader reads the words once, from a copy only it sees.
+   */
+  const slice = (el: HTMLElement, n: number): Array<{ box: HTMLElement; copy: HTMLElement }> => {
+    const doc = el.ownerDocument;
+    const words = (el.textContent || '').replace(/\s+/g, ' ').trim();
+    const fs = parseFloat(win.getComputedStyle(el).fontSize) || 16;
+    if (!words) return [];
+    const kids = Array.from(el.childNodes);
+    // the text's own width, on one line
+    const probe = doc.createElement('span');
+    probe.style.cssText = 'display:inline-block;white-space:nowrap';
+    probe.textContent = words;
+    el.textContent = '';
+    el.appendChild(probe);
+    const w = probe.getBoundingClientRect().width / (el.getBoundingClientRect().width / (el.offsetWidth || 1) || 1) / fs;
+    probe.remove();
+    const out: Array<{ box: HTMLElement; copy: HTMLElement }> = [];
+    for (let i = 0; i < n; i++) {
+      const box = doc.createElement('span');
+      box.className = 'ux-motion-slice';
+      box.setAttribute('aria-hidden', 'true');
+      box.style.cssText = `display:inline-block;position:relative;vertical-align:top;width:${w / n}em;overflow:hidden;overflow:clip;white-space:nowrap`;
+      const copy = doc.createElement('span');
+      copy.className = 'ux-motion-slice-text';
+      copy.style.cssText = `display:inline-block;position:relative;left:${(-i * w) / n}em;white-space:nowrap`;
+      copy.textContent = words;
+      box.appendChild(copy);
+      el.appendChild(box);
+      out.push({ box, copy });
+    }
+    const said = doc.createElement('span');
+    said.className = 'ux-motion-said';
+    said.textContent = words;
+    said.style.cssText = SR_ONLY;
+    el.appendChild(said);
+    const ws = el.style.whiteSpace;
+    el.style.whiteSpace = 'nowrap';
+    restores.push(() => {
+      el.textContent = '';
+      for (const k of kids) el.appendChild(k);
+      el.style.whiteSpace = ws;
+    });
+    return out;
+  };
+
   /**
    * Words on the same line move together: their line is their place in the
    * stagger. Read from layout (offsetTop), not from the screen, so a word
@@ -300,13 +364,13 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
     const a = item.appear;
     // an appear's split first; else a scroll's (words lit as the page scrolls)
     const appearSplit = a && item.text && opts.split && a.split !== 'none' ? a.split : null;
-    const scrollSplit = !appearSplit && item.scroll && item.scroll.split && item.scroll.split !== 'none' && item.scroll.split !== 'children' && item.text && opts.split ? (item.scroll.split as 'lines' | 'words' | 'chars') : null;
+    const scrollSplit = !appearSplit && item.scroll && item.scroll.split && item.scroll.split !== 'none' && item.scroll.split !== 'children' && item.scroll.split !== 'slices' && item.text && opts.split ? (item.scroll.split as 'lines' | 'words' | 'chars') : null;
     const splitBy = appearSplit || scrollSplit;
     const entry: Entry = {
       item,
       el,
       // a roll masks too: what is not a digit slides up into its word
-      units: appearSplit ? split(el, appearSplit, a!.effect === 'mask' || a!.effect === 'roll', a!.effect === 'roll' ? (a!.turns ?? 1) : -1) : scrollSplit ? split(el, scrollSplit, false) : [],
+      units: appearSplit ? split(el, appearSplit, a!.effect === 'mask' || a!.effect === 'roll', a!.effect === 'roll' ? (a!.turns ?? 1) : -1) : scrollSplit ? split(el, scrollSplit, !!item.scroll!.mask && scrollSplit !== 'chars', -1, !!item.scroll!.mask && scrollSplit === 'chars') : [],
       scrollUnits: !!scrollSplit,
       formation: null,
       base,
@@ -330,8 +394,22 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
     entries.push(entry);
     byEl.set(el, entry);
     // a formation: each child moves in turn (their looks read now, their starts at each measure)
+    const ORIGIN: Record<string, string> = { top: '50% 0%', bottom: '50% 100%', left: '0% 50%', right: '100% 50%', behind: '50% 50% -1em' };
+    const sco = item.scroll;
+    // a text's words or letters take a formation's order, outward, vary and origin: each piece its own start and turn
+    if (sco && scrollSplit && scrollSplit !== 'lines' && entry.units.length && ((sco.order && sco.order !== 'start') || sco.outward || sco.vary || (sco.origin && sco.origin !== 'center'))) {
+      const origin = ORIGIN[sco.origin || 'center'] || '';
+      entry.pieces = true;
+      entry.formation = entry.units.map((u) => {
+        const own = u.el.style.transformOrigin;
+        if (origin) {
+          u.el.style.transformOrigin = origin;
+          restores.push(() => (u.el.style.transformOrigin = own));
+        }
+        return { el: u.el, base: readBase(u.el), from: identity(), rank: 0, origin };
+      });
+    }
     if (item.scroll && item.scroll.split === 'children') {
-      const ORIGIN: Record<string, string> = { top: '50% 0%', bottom: '50% 100%', left: '0% 50%', right: '100% 50%' };
       const origin = ORIGIN[item.scroll.origin || 'center'] || '';
       entry.formation = Array.from(el.children)
         .filter((c): c is HTMLElement => c instanceof win.HTMLElement)
@@ -343,6 +421,18 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
           }
           return { el: c, base: readBase(c), from: identity(), rank: 0, origin };
         });
+    }
+    // slices: a one-line text cut into slices, each showing its strip of a copy of the words; the copies
+    // (or the slices, when whole) are a formation's pieces, placed by their slice
+    if (item.scroll && item.scroll.split === 'slices' && item.text && opts.split) {
+      const pieces = slice(el, item.scroll.slices ?? 4);
+      if (pieces.length) {
+        entry.sliced = true;
+        entry.formation = pieces.map((p) => {
+          const c = item.scroll!.whole ? p.box : p.copy;
+          return { el: c, base: readBase(c), from: identity(), rank: 0, origin: '', at: p.box };
+        });
+      }
     }
     // an upright loop: the children are read once, with the rotation their own CSS gives them
     if (item.loop && item.loop.upright) {
@@ -838,6 +928,14 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
     const v = Math.sin(i * 12.9898 + salt * 78.233) * 43758.5453;
     return v - Math.floor(v);
   };
+  /** a scroll's mask: each piece starts out of its own box on that side, on top of its start */
+  const masked = (s: State, sc: { mask?: string }): State => {
+    if (sc.mask === 'bottom') s.yp += 105;
+    else if (sc.mask === 'top') s.yp -= 105;
+    else if (sc.mask === 'right') s.xp += 105;
+    else if (sc.mask === 'left') s.xp -= 105;
+    return s;
+  };
   const formationOf = (e: Entry) => {
     const sc = e.item.scroll!;
     const fs = e.formation!;
@@ -847,7 +945,8 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
     const vary = Math.min(1, Math.max(0, sc.vary || 0));
     const placed = fs.map((f, i) => {
       // where the child is in the element, as laid out (offsets: no motion in them)
-      const c = f.el;
+      // measured where it sits (a slice's box: its copy is moved inside it)
+      const c = f.at || f.el;
       const same = c.offsetParent === e.el;
       const x = (same ? c.offsetLeft : c.offsetLeft - e.el.offsetLeft) + c.offsetWidth / 2;
       const y = (same ? c.offsetTop : c.offsetTop - e.el.offsetTop) + c.offsetHeight / 2;
@@ -856,7 +955,7 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
       return { f, i, dx, dy, dist: Math.min(1, Math.hypot(dx, dy) / Math.SQRT2) };
     });
     for (const p of placed) {
-      const s = { ...from };
+      const s = masked({ ...from }, sc);
       if (sc.outward) {
         const a = Math.atan2(Math.abs(p.dy), Math.abs(p.dx));
         const sx = p.dx < 0 ? -1 : 1;
@@ -864,7 +963,19 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
         // a start that moves across and down spreads from the centre, each child from its own side (the
         // child at the centre has none: it starts in place); one that moves one way only (up from below)
         // keeps its way for all, and only the turns open out
-        if (from.x && from.y) {
+        if (e.sliced) {
+          // slices sit on one line: the copies part from the centre, the inner ones furthest (Codrops'
+          // numbers), and a vertical start goes up and down in turn
+          const n = fs.length;
+          const half = n / 2;
+          const k = p.i < half ? half - p.i : p.i - half + 1;
+          s.x = sx * Math.abs(from.x) * (1 + (half - k)) / Math.max(1, half);
+          s.y = (p.i % 2 ? 1 : -1) * Math.abs(from.y);
+        } else if (e.pieces && (from.x || from.y) && !(from.x && from.y)) {
+          // a text's pieces on one axis part from the centre as far as each is from it (letters spread out from the middle)
+          s.x = sx * Math.abs(from.x) * Math.abs(p.dx);
+          s.y = (Math.abs(p.dy) < 0.02 ? (p.i % 2 ? 1 : -1) : sy) * Math.abs(from.y) * (Math.abs(p.dy) < 0.02 ? 1 : Math.abs(p.dy));
+        } else if (from.x && from.y) {
           const near = p.dist < 0.05 ? 0 : 1;
           s.x = near * sx * Math.cos(a) * Math.abs(from.x);
           s.y = near * sy * Math.sin(a) * Math.abs(from.y);
@@ -880,6 +991,11 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
         const m = (salt: number) => 1 - vary + 2 * vary * seeded(p.i, salt);
         s.x *= m(1);
         s.y *= m(2);
+        // a text's pieces scatter: without outward their moves may go either way too (letters from all round)
+        if (e.pieces && !sc.outward) {
+          if (seeded(p.i, 6) < vary / 2) s.x = -s.x;
+          if (seeded(p.i, 7) < vary / 2) s.y = -s.y;
+        }
         // a rotation may also turn the other way
         const turn = (v: number, salt: number) => (sc.outward ? v : seeded(p.i, salt) < vary / 2 ? -v : v) * m(salt + 10);
         s.rotate = turn(s.rotate, 3);
@@ -1047,7 +1163,7 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
           // each piece takes its share of the range in turn: the first starts at 0, the last ends at 1
           const w = Math.min(1, Math.max(0.05, sc.spread ?? 0.3));
           const n = e.units.length;
-          const from = asState(sc.from);
+          const from = masked(asState(sc.from), sc);
           const to = asState(sc.to);
           for (const u of e.units) {
             const s0 = n > 1 ? (u.index / (n - 1)) * (1 - w) : 0;

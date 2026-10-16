@@ -6,7 +6,7 @@ with a `data-scrollwork` attribute, or in code with `animate()`, `timeline()`,
 
 - **About 28 KB gzipped, no dependencies.** One file for a `<script>` tag, or
   an ES module for your bundler, with TypeScript types. WebGL effects are a
-  separate, optional file (`scrollwork/fx`, about 9 KB), and so are flip,
+  separate, optional file (`scrollwork/fx`, about 10 KB), and so are flip,
   morph, motion paths, dragging and sideways sections (`scrollwork/extras`,
   about 5 KB).
 - **Declarative first.** Text that rises line by line, parallax, pinned
@@ -141,7 +141,8 @@ A `scroll` can take an `ease`, and on text a `split` (`lines`, `words`,
 `chars`) with a `spread` (0.05 to 1): its `from` and `to` then apply to each
 piece in turn, so words light up as the paragraph is read
 (`{ "split": "words", "from": { "opacity": 0.2 }, "to": {}, "range": "in" }`).
-`split: "children"` does the same for each element inside it, a formation:
+`split: "slices"` cuts a one-line text into `slices` that come together as it
+scrolls in (after Codrops' Sliced Text Effect). `split: "children"` does the same for each element inside it, a formation:
 pictures flying into their grid while it is pinned. `order` (`start`, `end`,
 `center`, `edges`, `random`) says which goes first; `outward` gives each its
 side of the centre (a start that moves across and down spreads from the
@@ -308,7 +309,9 @@ hovering), `dither` (a crisp field of bayer or halftone dots over a drifting
 cloud or the element's picture, with a pointer trail) and `distort` (the
 pointer pushes the picture's cells along its path and they ease back, after
 Codrops' Distorted Pixels; with no pointer, on `always` or `scroll`, a slow
-sweep moves them). More follow.
+sweep moves them), and `bulge` (the picture, or the element's own words, swells
+towards the eye under a lit dome that follows the pointer, after Codrops' 3D Bulge
+Text Effect). More follow.
 
 ## Accessibility
 
@@ -362,4 +365,5 @@ MIT, © 2026 uxspot.io
 
 The `distort` effect follows Codrops' Distorted Pixels
 (github.com/codrops/DistortedPixels, MIT, © Codrops); its notice is in
-[docs/THIRD-PARTY.md](docs/THIRD-PARTY.md).
+[docs/THIRD-PARTY.md](docs/THIRD-PARTY.md). So does the `bulge` effect, after
+Codrops' 3D Bulge Text Effect (tympanus.net/codrops/?p=76625, MIT, © Codrops).

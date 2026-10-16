@@ -180,16 +180,33 @@ export interface ScrollMotion {
    * from the centre (a fan).
    */
   outward?: boolean;
-  /** children: 0 to 1, how much each child's start differs from the next (seeded, so the same each time); rotations may turn either way */
+  /** children, or a text's words or letters: 0 to 1, how much each piece's start differs from the next (seeded, so the same each time); rotations may turn either way */
   vary?: number;
-  /** children: the point each one turns and scales about */
+  /** children, or a text's words or letters: the point each one turns and scales about */
   origin?: ScrollOrigin;
+  /**
+   * slices: how many vertical slices a one-line text is cut into, 2 to 12 (4).
+   * Each slice shows its strip of a copy of the words; together they read as
+   * the text (after Codrops' Sliced Text Effect). `outward` pushes the copies
+   * away from the centre, the inner ones furthest, and sends a vertical start
+   * up and down in turn.
+   */
+  slices?: number;
+  /** slices: the slices move whole, as strips; otherwise the words move inside slices that stay in place */
+  whole?: boolean;
+  /**
+   * a text's words or letters: each starts out of its own box on this side,
+   * hidden by it, and slides into view (letters each in a box of their own);
+   * on top of `from`
+   */
+  mask?: 'top' | 'bottom' | 'left' | 'right';
 }
 
-/** What a scroll motion moves in turn: a text's lines, words or letters, or the element's children. */
-export type ScrollSplit = TextSplit | 'children';
+/** What a scroll motion moves in turn: a text's lines, words or letters, the element's children, or slices of a one-line text. */
+export type ScrollSplit = TextSplit | 'children' | 'slices';
 export type ScrollOrder = 'start' | 'end' | 'center' | 'edges' | 'random';
-export type ScrollOrigin = 'center' | 'top' | 'bottom' | 'left' | 'right';
+/** `behind`: a point behind the piece, in depth (letters swinging round it) */
+export type ScrollOrigin = 'center' | 'top' | 'bottom' | 'left' | 'right' | 'behind';
 
 /** Pin: the element holds its place on screen for a stretch of scrolling. */
 export interface PinMotion {

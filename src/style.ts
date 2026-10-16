@@ -12,6 +12,8 @@ export interface State {
   y: number;
   /** percent of the element's own height, added to y (the mask effect's lines) */
   yp: number;
+  /** percent of the element's own width, added to x (a piece sliding sideways out of its mask) */
+  xp: number;
   scale: number;
   /** degrees */
   rotate: number;
@@ -47,7 +49,7 @@ export interface Pic {
   k: number;
 }
 
-export const identity = (): State => ({ x: 0, y: 0, yp: 0, scale: 1, rotate: 0, rx: 0, ry: 0, pz: 0, opacity: 1, blur: 0, clip: 0, ct: 0, cr: 0, cl: 0, sx: 1, sy: 1, fill: null, ink: null, image: null });
+export const identity = (): State => ({ x: 0, y: 0, yp: 0, xp: 0, scale: 1, rotate: 0, rx: 0, ry: 0, pz: 0, opacity: 1, blur: 0, clip: 0, ct: 0, cr: 0, cl: 0, sx: 1, sy: 1, fill: null, ink: null, image: null });
 
 const mixRgba = (a: Rgba, b: Rgba, k: number): Rgba => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k, a[3] + (b[3] - a[3]) * k];
 /** between two tints: the colour too when both have one, and how far along */
@@ -69,6 +71,7 @@ export const mix = (a: State, b: State, k: number): State => ({
   x: a.x + (b.x - a.x) * k,
   y: a.y + (b.y - a.y) * k,
   yp: a.yp + (b.yp - a.yp) * k,
+  xp: a.xp + (b.xp - a.xp) * k,
   scale: a.scale + (b.scale - a.scale) * k,
   rotate: a.rotate + (b.rotate - a.rotate) * k,
   rx: a.rx + (b.rx - a.rx) * k,
@@ -93,6 +96,7 @@ export const combine = (a: State, b: State): State => ({
   x: a.x + b.x,
   y: a.y + b.y,
   yp: a.yp + b.yp,
+  xp: a.xp + b.xp,
   scale: a.scale * b.scale,
   rotate: a.rotate + b.rotate,
   rx: a.rx + b.rx,
@@ -317,9 +321,10 @@ function paintInk(el: HTMLElement, value: string | null) {
 
 /** Paint a state, added to the element's own look. */
 export function paint(el: HTMLElement, s: State, b: Base) {
-  if (s.x || s.y || s.yp) {
+  if (s.x || s.y || s.yp || s.xp) {
     const y = s.y + 'px' + (s.yp ? ' + ' + s.yp + '%' : '');
-    const tx = b.t[0] ? 'calc(' + b.t[0] + ' + ' + s.x + 'px)' : s.x + 'px';
+    const x = s.x + 'px' + (s.xp ? ' + ' + s.xp + '%' : '');
+    const tx = b.t[0] ? 'calc(' + b.t[0] + ' + ' + x + ')' : s.xp ? 'calc(' + x + ')' : x;
     const ty = b.t[1] ? 'calc(' + b.t[1] + ' + ' + y + ')' : s.yp ? 'calc(' + y + ')' : y;
     el.style.translate = tx + ' ' + ty + (b.t[2] ? ' ' + b.t[2] : '');
   } else el.style.translate = b.inline.translate;

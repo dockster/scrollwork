@@ -71,7 +71,9 @@ execFileSync('npx', ['tsc', '-p', 'tsconfig.json'], { stdio: 'inherit' });
 // the clip state (a corner reveal), a scroll's ease, and words lit one by one as the page scrolls: 26.1, so 26.5
 // formations (a scroll split by children: in an order, outward, varied, about an origin; Codrops' On-Scroll Layout Formations): 27.0, so 27.5
 // scramble (a hover and in-view letter scramble; Codrops' Line Text Hover Animations): 28.1, so 28.5
-const BUDGET = { 'scrollwork.min.js': 28.5, 'scrollwork-fx.min.js': 9, 'scrollwork-extras.min.js': 5 };
+// slices (a one-line text cut into slices that come together as the page scrolls; Codrops' Sliced Text Effect): 28.6, so 29; a text's pieces as a formation and masks from a side (Codrops' On-Scroll Typography Animations) take it to 29.0
+// the bulge (Codrops' 3D Bulge Text Effect: a lit lens around the pointer, and a text host's words drawn into its picture): 9.8, so 10
+const BUDGET = { 'scrollwork.min.js': 29, 'scrollwork-fx.min.js': 10, 'scrollwork-extras.min.js': 5 };
 let over = '';
 for (const f of ['scrollwork.mjs', 'scrollwork.js', 'scrollwork.min.js', 'fx.mjs', 'scrollwork-fx.js', 'scrollwork-fx.min.js', 'extras.mjs', 'scrollwork-extras.js', 'scrollwork-extras.min.js']) {
   const b = readFileSync(`dist/${f}`);

@@ -13,8 +13,9 @@ import { program, setUniforms, texture, triangle, type Program } from './gl.js';
 import { GLITCH } from './shaders/glitch.js';
 import { DITHER } from './shaders/dither.js';
 import { DISTORT } from './shaders/distort.js';
+import { BULGE } from './shaders/bulge.js';
 import { rgbaOf } from './spec.js';
-import type { DistortFx, Fx, FxType, TexState } from './types.js';
+import type { BulgeFx, DistortFx, Fx, FxType, TexState } from './types.js';
 import type { Signals } from '../types.js';
 
 export interface SurfaceOptions {
@@ -68,6 +69,12 @@ export interface Host {
   dist: Distortion | null;
   /** the pointer is over it (tracked for a distortion, even under what covers it) */
   inside: boolean;
+  /** a bulge, when the host has one: its dome follows the eased pointer (lx, ly) */
+  bulge: BulgeFx | null;
+  /** its words are its picture: drawn into a bitmap of its size (a text host with a bulge) */
+  text: boolean;
+  /** when a real pointer last moved over it (performance.now()); a bulge sweeps on its own until one does */
+  real: number;
   /** what to undo on stop */
   position: string | null;
   /** a field's host is isolated so its view can sit behind its children; the inline value it had */
@@ -210,10 +217,10 @@ export interface Surface {
   readonly hosts: ReadonlyMap<HTMLElement, Host>;
 }
 
-const SHADERS: Record<FxType, string> = { glitch: GLITCH, dither: DITHER, distort: DISTORT };
+const SHADERS: Record<FxType, string> = { glitch: GLITCH, dither: DITHER, distort: DISTORT, bulge: BULGE };
 /** effects that leave the picture as it is at k 0: at rest the host's own picture shows and nothing draws */
-const IDLE_IDENTITY: Record<FxType, boolean> = { glitch: true, dither: false, distort: true };
-const STYLE = '.ux-motion-fx{position:absolute;inset:0;width:100%;height:100%;border-radius:inherit;pointer-events:none;display:block}.ux-motion-fx.is-crisp{image-rendering:pixelated}.ux-motion-fx.is-field{z-index:-1}';
+const IDLE_IDENTITY: Record<FxType, boolean> = { glitch: true, dither: false, distort: true, bulge: true };
+const STYLE = '.ux-motion-fx{position:absolute;inset:0;width:100%;height:100%;border-radius:inherit;pointer-events:none;display:block}.ux-motion-fx.is-crisp{image-rendering:pixelated}.ux-motion-fx.is-field{z-index:-1}.ux-motion-fx-text,.ux-motion-fx-text *{-webkit-text-fill-color:transparent!important;text-shadow:none!important}';
 /** hosts that cannot hold a child canvas */
 const NO_CHILD = /^(IMG|VIDEO|CANVAS|INPUT|TEXTAREA|SELECT|svg|IFRAME|BR|HR)$/;
 
@@ -324,6 +331,13 @@ export function createSurface(o: SurfaceOptions): Surface | null {
     }
     const url = urlIn(bg);
     h.fit = size === 'contain' ? 'contain' : 'cover';
+    if (!url && h.bulge && (h.el.textContent || '').trim()) {
+      // its words are drawn once the page's fonts are in (renderHost draws them at the bitmap's size)
+      h.text = true;
+      h.tw = 0;
+      h.texState = fontsIn ? 'ready' : 'loading';
+      return;
+    }
     if (!url) {
       h.texState = 'none';
       return;
@@ -354,6 +368,77 @@ export function createSurface(o: SurfaceOptions): Surface | null {
       h.texState = 'failed';
     };
     img.src = url;
+  };
+
+  // ── a text host's words, drawn into its picture ──
+  // Each word is drawn where the page laid it out (a range's box), in its own element's font, colour and
+  // letter spacing, so the lines break as they do on the page; nothing is read from other origins.
+  let fontsIn = !doc.fonts;
+  const textIn = () => {
+    for (const h of hosts.values())
+      if (h.text) {
+        h.tw = 0;
+        h.texState = 'ready';
+      }
+    wake();
+  };
+  if (doc.fonts) {
+    doc.fonts.ready.then(() => {
+      fontsIn = true;
+      textIn();
+    });
+    doc.fonts.addEventListener('loadingdone', textIn);
+  }
+  const caseOf = (t: string, how: string) => (how === 'uppercase' ? t.toUpperCase() : how === 'lowercase' ? t.toLowerCase() : how === 'capitalize' ? t.replace(/(^|\s)(\S)/g, (_, a, b) => a + b.toUpperCase()) : t);
+  const drawText = (h: Host, w: number, hh: number): boolean => {
+    const b = h.el.getBoundingClientRect();
+    const cw = h.el.offsetWidth;
+    const ch = h.el.offsetHeight;
+    if (!b.width || !b.height || !cw || !ch) return false;
+    const c = new g.OffscreenCanvas(w, hh);
+    const x = c.getContext('2d') as OffscreenCanvasRenderingContext2D | null;
+    if (!x) return false;
+    // drawn in the element's own CSS px (its font sizes are), from boxes measured on screen (a zoomed canvas, a scaled preview)
+    const zx = b.width / cw;
+    const zy = b.height / ch;
+    x.scale(w / cw, hh / ch);
+    const range = doc.createRange();
+    const walk = doc.createTreeWalker(h.el, 4);
+    for (let t = walk.nextNode() as Text | null; t; t = walk.nextNode() as Text | null) {
+      const el = t.parentElement;
+      if (!el) continue;
+      const cs = win.getComputedStyle(el);
+      if (cs.visibility === 'hidden') continue;
+      x.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+      x.fillStyle = cs.color;
+      (x as unknown as { letterSpacing: string }).letterSpacing = cs.letterSpacing === 'normal' ? '0px' : cs.letterSpacing;
+      x.textBaseline = 'alphabetic';
+      const re = /\S+/g;
+      for (let m = re.exec(t.data); m; m = re.exec(t.data)) {
+        range.setStart(t, m.index);
+        range.setEnd(t, m.index + m[0].length);
+        const r = range.getClientRects()[0];
+        if (!r || !r.width) continue;
+        const word = caseOf(m[0], cs.textTransform);
+        const mt = x.measureText(word);
+        const asc = mt.fontBoundingBoxAscent || parseFloat(cs.fontSize) * 0.8;
+        const desc = mt.fontBoundingBoxDescent || parseFloat(cs.fontSize) * 0.2;
+        x.fillText(word, (r.left - b.left) / zx, (r.top - b.top) / zy + (r.height / zy - asc - desc) / 2 + asc);
+      }
+    }
+    try {
+      const tex = h.tex || texture(gl);
+      if (!tex) return false;
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, c);
+      h.tex = tex;
+      h.tw = w;
+      h.th = hh;
+      return true;
+    } catch {
+      return false;
+    }
   };
 
   // ── watching hosts: on screen or not, resized ──
@@ -402,7 +487,7 @@ export function createSurface(o: SurfaceOptions): Surface | null {
   const onPointer = (ev: PointerEvent) => {
     for (const h of hosts.values()) {
       const d = h.dist;
-      if (!(h.field || d) || !h.visible) continue;
+      if (!(h.field || d || h.bulge) || !h.visible) continue;
       const b = h.el.getBoundingClientRect();
       if (!b.width || !b.height) continue;
       const x = (ev.clientX - b.left) / b.width;
@@ -426,6 +511,20 @@ export function createSurface(o: SurfaceOptions): Surface | null {
         // leaving and coming back is not a move across the gap
         d.prev = inside ? [x, y] : null;
         h.inside = inside;
+      } else if (h.bulge) {
+        // a bulge on a text: its words often take no pointer of their own (a design tool's preview), so it
+        // follows the pointer over its box, as a distortion does
+        if (inside) {
+          if (h.hover === 0 && h.hoverTo === 0) {
+            h.lx = x;
+            h.ly = y;
+          }
+          h.px = x;
+          h.py = y;
+          h.hoverTo = 1;
+          h.real = win.performance.now();
+        } else if (h.inside && !h.el.contains(doc.activeElement)) h.hoverTo = 0;
+        h.inside = inside;
       }
       if (!h.field) continue;
       if (inside) {
@@ -445,7 +544,7 @@ export function createSurface(o: SurfaceOptions): Surface | null {
     // left the window altogether
     if (ev.relatedTarget) return;
     for (const h of hosts.values())
-      if (h.field || h.dist) {
+      if (h.field || h.dist || h.bulge) {
         h.hoverTo = 0;
         h.inside = false;
         if (h.dist) h.dist.prev = null;
@@ -459,14 +558,17 @@ export function createSurface(o: SurfaceOptions): Surface | null {
     doc.addEventListener('pointerout', onPointerOut);
   };
 
+  // a text host's own words are hidden only while its bulge is drawn over them (they stay in the page)
   const show = (h: Host) => {
     if (h.shown) return;
     h.view.style.display = '';
+    if (h.text) h.el.classList.add('ux-motion-fx-text');
     h.shown = true;
   };
   const hide = (h: Host) => {
     if (!h.shown) return;
     h.view.style.display = 'none';
+    h.el.classList.remove('ux-motion-fx-text');
     h.shown = false;
   };
 
@@ -534,6 +636,7 @@ export function createSurface(o: SurfaceOptions): Surface | null {
       off.width = w;
       off.height = hh;
     }
+    if (h.text && (h.tw !== w || h.th !== hh) && !drawText(h, w, hh)) return false;
     gl.viewport(0, 0, w, hh);
     gl.bindVertexArray(vao);
     const fit = fitOf(h, w, hh);
@@ -649,6 +752,9 @@ export function createSurface(o: SurfaceOptions): Surface | null {
         field: fx.some((f) => f.type === 'dither'),
         t0: win.performance.now(),
         dist: null,
+        bulge: fx.find((f): f is BulgeFx => f.type === 'bulge') || null,
+        text: false,
+        real: -1e9,
         inside: false,
         shown: false,
         position,
@@ -693,11 +799,19 @@ export function createSurface(o: SurfaceOptions): Surface | null {
         if (b.width && b.height) {
           h.px = Math.min(1, Math.max(0, (e.clientX - b.left) / b.width));
           h.py = Math.min(1, Math.max(0, (e.clientY - b.top) / b.height));
+          if (h.bulge && e.isTrusted) {
+            // coming in from rest, the dome rises where the pointer is rather than sliding from the last place
+            if (h.hover === 0) {
+              h.lx = h.px;
+              h.ly = h.py;
+            }
+            h.real = win.performance.now();
+          }
         }
         wake();
       });
       hosts.set(el, h);
-      if (h.field || h.dist) listenPointer();
+      if (h.field || h.dist || h.bulge) listenPointer();
       io?.observe(el);
       ro?.observe(el);
       loadPicture(h);
@@ -711,6 +825,7 @@ export function createSurface(o: SurfaceOptions): Surface | null {
       ro?.unobserve(el);
       for (const f of h.off) f();
       h.view.remove();
+      el.classList.remove('ux-motion-fx-text');
       if (h.tex) gl.deleteTexture(h.tex);
       if (h.dist?.tex) gl.deleteTexture(h.dist.tex);
       if (h.position !== null) el.style.position = h.position;
@@ -726,9 +841,16 @@ export function createSurface(o: SurfaceOptions): Surface | null {
           h.hover = approach(h.hover, h.hoverTo, h.hoverTo > h.hover ? h.fx[0].in : h.fx[0].out, dt);
           if (h.hover !== h.hoverTo) moving = true;
         }
-        if (h.field && (h.lx !== h.px || h.ly !== h.py)) {
-          // the trail's tail catches up with the pointer over `trail` seconds
-          const lag = (h.fx.find((f) => f.type === 'dither') as { trail?: number } | undefined)?.trail ?? 0.35;
+        // a bulge with no pointer moving it (always, on scroll or appear, or hovered without one: keyboard
+        // focus, a design tool's play) sweeps on its own path, as a distortion does; a real pointer takes over
+        const bf = h.bulge;
+        if (bf && now - h.real > REAL && (bf.on !== 'hover' || (h.hoverTo > 0 && !h.inside))) {
+          [h.px, h.py] = sweepAt(bf.seed, ((now - h.t0) / 1000) * bf.speed * 0.6);
+          if (h.hover > 0 || bf.on !== 'hover') moving = true;
+        }
+        if ((h.field || bf) && (h.lx !== h.px || h.ly !== h.py)) {
+          // the trail's tail catches up with the pointer over `trail` seconds (a bulge's dome is that tail)
+          const lag = (h.fx.find((f) => f.type === 'dither' || f.type === 'bulge') as { trail?: number } | undefined)?.trail ?? 0.35;
           const keep = lag > 0 ? Math.pow(0.01, dt / (lag * 1000)) : 0;
           h.lx = h.px + (h.lx - h.px) * keep;
           h.ly = h.py + (h.ly - h.py) * keep;

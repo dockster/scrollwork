@@ -1,5 +1,33 @@
 # Changelog
 
+## 1.15.0
+
+- scrollwork/fx `bulge`: the picture, or an element's own words, swells towards
+  the eye around the pointer under a dome lit from the top left, which follows
+  the pointer a little behind (`reach`, `strength`, `shade`, `trail`). On a text
+  element its words are drawn where the page laid them out, in their own font,
+  colour, letter spacing and case, and the element's words are made
+  transparent only while it is drawn (they stay in the page). With no pointer
+  it swells along a slow sweep, as `distort` does. After Codrops' 3D Bulge Text
+  Effect (MIT, docs/THIRD-PARTY.md), rebuilt without three.js or html2canvas.
+- scrollwork-fx.min.js is 9.9 KB gzipped, budget 10 (was 9).
+- A scroll split by `slices`: a one-line text cut into `slices` (2 to 12, 4)
+  vertical slices, each showing its strip of a copy of the words; the copies
+  (or the slices themselves, with `whole`) take a formation's `order`,
+  `outward` and `vary` and come together as the page scrolls. `outward` parts
+  them from the centre, the middle slices furthest, and sends a vertical start
+  up and down in turn. Screen readers read the words once. After Codrops'
+  Sliced Text Effect (MIT, docs/THIRD-PARTY.md), rebuilt without GSAP.
+- A scroll's words and letters take a formation's `order`, `outward`, `vary`
+  and `origin`: which goes first, a start parted from the centre as far as
+  each piece is from it, starts that differ and (without outward) may go the
+  other way, and the point each turns about, with `origin: "behind"`, a point
+  1em behind it in depth. And `mask`: each line, word or letter starts out of
+  its own box on a side and slides into view (letters each in a box of their
+  own). After Codrops' On-Scroll Typography Animations (MIT,
+  docs/THIRD-PARTY.md).
+- scrollwork.min.js is 29.0 KB gzipped, budget 29 (was 28.5).
+
 ## 1.14.1
 
 - A custom cursor sits on the pointer when the element it moves in is not the root: a
