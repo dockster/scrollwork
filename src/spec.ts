@@ -6,7 +6,7 @@
 import { SPEC_VERSION } from './types.js';
 import { EASINGS } from './easing.js';
 import { resolveVars } from './vars.js';
-import type { AppearMotion, FxSpec, LoopMotion, Interaction, InteractionAnimation, MotionEase, MotionItem, MotionKey, MotionSpec, MotionState, PinMotion, ScrollMotion, CursorMotion, LoaderMotion, RolloverMotion } from './types.js';
+import type { AppearMotion, FxSpec, LoopMotion, Interaction, InteractionAnimation, MotionEase, MotionItem, MotionKey, MotionSpec, MotionState, PinMotion, ScrollMotion, CursorMotion, LoaderMotion, RolloverMotion, EdgeFade } from './types.js';
 
 export const EASES: readonly MotionEase[] = ['smooth', 'out', 'in-out', 'expo', 'back', 'linear', 'in', 'in-back', 'in-out-back', ...EASINGS];
 const EFFECTS = ['fade', 'slide-up', 'mask', 'blur', 'scale', 'custom', 'roll'] as const;
@@ -18,6 +18,8 @@ const MASKS = ['top', 'bottom', 'left', 'right'] as const;
 const RANGES = ['through', 'in', 'out', 'hold'] as const;
 const TRIGGERS = ['none', 'click', 'drag', 'hover', 'press', 'key', 'mouseenter', 'mouseleave', 'mousedown', 'mouseup', 'delay', 'media-end', 'media-time'] as const;
 const ACTIONS = ['none', 'navigate', 'change', 'back', 'scroll', 'url', 'overlay', 'swap', 'close', 'custom'] as const;
+/** the point an element's motions turn and grow around (MotionItem.origin) */
+const PIVOTS = ['center', 'top', 'bottom', 'left', 'right', 'top-left', 'top-right', 'bottom-left', 'bottom-right'] as const;
 
 type Loose = Record<string, unknown>;
 const isObj = (v: unknown): v is Loose => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -309,6 +311,7 @@ export function readInteraction(v: unknown, notes: Notes, what: string, i: numbe
     delay: num(v.delay, 0, notes, what + '.delay', 0),
     action,
     animation: readAnimation(v.animation, notes, what + '.animation', trigger === 'press' ? 0.12 : 0.25),
+    ...(typeof v.source === 'string' && v.source ? { source: v.source } : {}),
   };
 }
 
@@ -328,7 +331,7 @@ export function readRollover(v: unknown, notes: Notes, what: string): RolloverMo
   }
   const effect = oneOf(v.effect, ['roll', 'wipe', 'scramble'] as const, 'roll', notes, what + '.effect');
   const d = ROLLOVER_DEFAULTS[effect];
-  const dirs = effect === 'roll' ? (['up', 'down'] as const) : (['left', 'right', 'up', 'down', 'center'] as const);
+  const dirs = effect === 'roll' ? (['up', 'down'] as const) : effect === 'wipe' ? (['left', 'right', 'up', 'down', 'center', 'pointer'] as const) : (['left', 'right', 'up', 'down', 'center'] as const);
   const out: RolloverMotion = {
     effect,
     direction: oneOf(v.direction, dirs as readonly RolloverMotion['direction'][], d.direction, notes, what + '.direction'),
@@ -414,6 +417,15 @@ export function readItem(v: unknown, notes: Notes, i: number): MotionItem | null
         return ok;
       }) as FxSpec[];
       if (fx.length) item.fx = fx;
+    }
+  }
+  if (v.origin !== undefined) item.origin = oneOf(v.origin, PIVOTS, 'center', notes, what + '.origin');
+  if (v.fade !== undefined) {
+    if (!isObj(v.fade)) notes.add(`${what}.fade: expected px for each edge, like {"top": 40, "bottom": 40}`);
+    else {
+      const f: EdgeFade = {};
+      for (const k of ['top', 'right', 'bottom', 'left'] as const) if (v.fade[k] !== undefined) f[k] = num(v.fade[k], 0, notes, `${what}.fade.${k}`, 0, 2000);
+      if (Object.values(f).some((x) => x > 0)) item.fade = f;
     }
   }
   return item;

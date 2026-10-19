@@ -4,7 +4,7 @@ Scroll, appear, pin and interaction motion for the web. Describe it in HTML
 with a `data-scrollwork` attribute, or in code with `animate()`, `timeline()`,
 `inView()` and `scroll()`.
 
-- **About 29 KB gzipped, no dependencies.** One file for a `<script>` tag, or
+- **About 30 KB gzipped, no dependencies.** One file for a `<script>` tag, or
   an ES module for your bundler, with TypeScript types. WebGL effects are a
   separate, optional file (`scrollwork/fx`, about 10 KB), and so are flip,
   morph, motion paths, dragging and sideways sections (`scrollwork/extras`,
@@ -126,9 +126,11 @@ defaults, is in [docs/REFERENCE.md](docs/REFERENCE.md).
 | `loop` | A state played over and over while on screen: a marquee (with `fade` for its edges), a spin (with `upright` to keep the children level), a `flipbook` of the children. |
 | `cursor` | The element follows the pointer as the page's cursor, with a `lag`, a `links` state over links, the page's own cursor hidden. |
 | `loader` | The element covers the page as it opens, plays what appears inside it, holds, then leaves; every other appear waits for it. The root carries `data-sw-loading` while it is up. |
-| `hover`, `press` | A state to move to while hovered (or focused by keyboard) or pressed. |
-| `rollover` | A button's hover effect: `roll` sends the label's letters out one after another as a copy rolls in (`direction` up or down, `stagger`), `wipe` sweeps a `color` across it from a side or the centre while its words take an `ink`. `scramble` flickers each letter through random characters (`turns`, `glyphs`) before it lands on its own, with a `cursor` block and random `colors` if asked, and plays on hover, as the text comes into view, or both (`on`). Played by the nearest link or button around it, or by keyboard focus; one of each, as a list, on the same element. |
-| `interactions` | The full list: click, key, delay, a video ending and more, changing state, scrolling to an element, or calling your own `custom` action. |
+| `hover`, `press` | A state to move to while hovered (or focused by keyboard) or pressed. With `"source": "parent"` (or another element's id) it plays while that element is hovered or has the keyboard inside it: a card's picture that grows while the card is hovered. |
+| `rollover` | A button's hover effect: `roll` sends the label's letters out one after another as a copy rolls in (`direction` up or down, `stagger`), `wipe` sweeps a `color` across it from a side or the centre while its words take an `ink`, or with `direction: "pointer"` ripples it: a circle of the colour grows from where the pointer comes in and goes back toward where it leaves. `scramble` flickers each letter through random characters (`turns`, `glyphs`) before it lands on its own, with a `cursor` block and random `colors` if asked, and plays on hover, as the text comes into view, or both (`on`). Played by the nearest link or button around it, or by keyboard focus; one of each, as a list, on the same element. |
+| `interactions` | The full list: click, key, delay, a video ending and more, changing state, scrolling to an element, or calling your own `custom` action. Each can be heard on another element (`source`). |
+| `origin` | The point its motions turn and grow around: `center` (the default), `top`, `bottom`, `left`, `right` or a corner (`top-left`, …). A card that tips from its top edge. Its own resting rotation stays as it is. |
+| `fade` | Its edges fade to nothing, in px from each: `{ "top": 60, "bottom": 60 }` for a window that words scroll through. |
 
 A **state** is `{ x, y, scale, rotate, opacity, blur }`, in px, a multiple,
 degrees, 0 to 1 and px. It is relative to the element as your CSS draws it.
@@ -150,7 +152,7 @@ centre; one that moves one way only keeps it for all) and opens the turns out
 as far as each is from the centre;
 `vary` (0 to 1) makes each start a little different, the same every time;
 `origin` (`center`, `top`, `bottom`, `left`, `right`) is the point they turn
-about.
+about (the element's own `origin`, in the table above, is where the whole element turns).
 
 If the JSON is broken, or a value is not one Scrollwork knows, it says so in
 the console (`[scrollwork] …`) and uses the default. Pass `warn: false` to

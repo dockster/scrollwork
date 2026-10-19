@@ -7,7 +7,8 @@
 //   leave they come back the other way, the last letter first.
 // - wipe: a colour grows across the element from a side (or the centre) as
 //   a background layer above its own background, while its words take
-//   another colour.
+//   another colour. From the pointer, it is a ripple: a circle of the colour
+//   grows from where the pointer comes in and goes back toward where it leaves.
 // - scramble: each letter flickers through random characters and lands on
 //   its own (after Codrops' Line Text Hover Animations, MIT); it can also play
 //   as the text comes into view.
@@ -171,10 +172,12 @@ function wipe(el: HTMLElement, r: RolloverMotion, ctx: RolloverContext) {
   // the colour is a background layer above the element's own, which stays under it
   const own = cs && cs.backgroundImage && cs.backgroundImage !== 'none' ? cs.backgroundImage : '';
   const list = (mine: string, theirs: string | undefined) => (own ? `${mine}, ${theirs}` : mine);
+  const ripple = r.direction === 'pointer';
   const across = r.direction === 'up' || r.direction === 'down' ? false : true;
   const from = r.direction === 'right' ? 'left center' : r.direction === 'left' ? 'right center' : r.direction === 'up' ? 'center bottom' : r.direction === 'down' ? 'center top' : 'center center';
-  const rest = across ? '0% 100%' : '100% 0%';
-  el.style.backgroundImage = list(`linear-gradient(${r.color}, ${r.color})`, own);
+  const rest = ripple ? '0px 0px' : across ? '0% 100%' : '100% 0%';
+  // a ripple is a circle: the largest one its square layer holds
+  el.style.backgroundImage = list(ripple ? `radial-gradient(circle closest-side, ${r.color} 99%, transparent 100%)` : `linear-gradient(${r.color}, ${r.color})`, own);
   el.style.backgroundRepeat = list('no-repeat', cs?.backgroundRepeat);
   el.style.backgroundPosition = list(from, cs?.backgroundPosition);
   el.style.backgroundSize = list(rest, cs?.backgroundSize);
@@ -195,12 +198,52 @@ function wipe(el: HTMLElement, r: RolloverMotion, ctx: RolloverContext) {
   // after this wipe are reached too; each one's own transition comes back on stop
   const touched = new Map<HTMLElement, string>();
   if (r.ink) el.style.setProperty('--sw-ink', r.ink);
+  const control = controlOf(el, r, ctx);
+  // a ripple's point: where the pointer came in or went out, in the element's own box (the centre for the keyboard)
+  let at: number[] | null = null;
+  let was = false;
+  if (ripple) {
+    // in the element's own px: on screen it may be scaled (a zoomed canvas, a transformed parent)
+    const mark = (ev: Event) => {
+      const b = el.getBoundingClientRect();
+      const k = b.width ? el.offsetWidth / b.width : 1;
+      at = [((ev as PointerEvent).clientX - b.left) * k, ((ev as PointerEvent).clientY - b.top) * k];
+    };
+    ctx.on(control, 'pointerenter', mark);
+    ctx.on(control, 'pointerleave', mark);
+  }
   const play = (on: boolean) => {
     const t = ctx.reduced() ? '0s' : `${r.duration}s`;
-    el.style.transition = `${base}background-size ${t} ${ease}${r.ink ? `, color ${t} ${ease}` : ''}`;
+    const trans = `${base}background-size ${t} ${ease}${ripple ? `, background-position ${t} ${ease}` : ''}${r.ink ? `, color ${t} ${ease}` : ''}`;
     const sizes = el.style.backgroundSize.split(',');
-    sizes[0] = on ? '100% 100%' : rest;
-    el.style.backgroundSize = sizes.join(',');
+    if (ripple) {
+      if (on === was) return;
+      was = on;
+      const w = el.offsetWidth;
+      const h = el.offsetHeight;
+      const p = at || [w / 2, h / 2];
+      at = null;
+      const full = Math.ceil(2 * Math.hypot(w, h));
+      const cur = parseFloat((win ? win.getComputedStyle(el).backgroundSize : '0').split(',')[0]) || 0;
+      // the circle's centre moves to the point at once, at the size it has now (covering the element, or nothing),
+      // then grows or shrinks about it: its corner moves with half its size, so the centre stays on the point
+      const put = (size: number) => {
+        sizes[0] = `${size}px ${size}px`;
+        el.style.backgroundSize = sizes.join(',');
+        const pos = el.style.backgroundPosition.split(',');
+        pos[0] = `${p[0] - size / 2}px ${p[1] - size / 2}px`;
+        el.style.backgroundPosition = pos.join(',');
+      };
+      el.style.transition = base ? base.slice(0, -2) : 'none';
+      put(cur);
+      void el.offsetWidth;
+      el.style.transition = trans;
+      put(on ? full : 0);
+    } else {
+      el.style.transition = trans;
+      sizes[0] = on ? '100% 100%' : rest;
+      el.style.backgroundSize = sizes.join(',');
+    }
     if (!r.ink) return;
     (Array.from(el.querySelectorAll('*')) as HTMLElement[]).forEach((i) => {
       if (!touched.has(i)) touched.set(i, i.style.transition);
@@ -208,7 +251,7 @@ function wipe(el: HTMLElement, r: RolloverMotion, ctx: RolloverContext) {
     });
     el.classList.toggle('sw-ink', on);
   };
-  listen(controlOf(el, r, ctx), ctx, play);
+  listen(control, ctx, play);
   ctx.restore(() => {
     el.style.backgroundImage = had.image;
     el.style.backgroundSize = had.size;

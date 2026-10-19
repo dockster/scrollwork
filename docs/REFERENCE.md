@@ -141,12 +141,13 @@ from where it is. One effect as an object, or a list with one of each.
 <a href="/start"><span data-scrollwork='{"rollover": {"effect": "roll"}}'>Get started</span></a>
 <button data-scrollwork='{"rollover": {"effect": "wipe", "color": "#A6F4C5", "ink": "#000"}}'>Contact</button>
 <button data-scrollwork='{"rollover": [{"effect": "roll"}, {"effect": "wipe", "color": "#FF6B02"}]}'>Get started</button>
+<button data-scrollwork='{"rollover": {"effect": "wipe", "direction": "pointer", "color": "#D4FF3A", "ink": "#000"}}'>Let's talk</button>
 ```
 
 | Field | Default | |
 |---|---|---|
 | `effect` | `"roll"` | `roll`: the letters move out of a one-line window one after another as a copy moves in. `wipe`: a colour sweeps across the element. |
-| `direction` | roll `"up"`, wipe `"right"` | roll: `up` or `down`. wipe: the way the colour travels, `right` (from the left edge), `left`, `up` (from the bottom), `down`, or `center` (outward). |
+| `direction` | roll `"up"`, wipe `"right"` | roll: `up` or `down`. wipe: the way the colour travels, `right` (from the left edge), `left`, `up` (from the bottom), `down`, `center` (outward), or `pointer`: a ripple, a circle of the colour growing from where the pointer comes in (from the centre for keyboard focus) and going back toward where it leaves |
 | `duration` | roll `0.2`, wipe `0.8` | seconds a letter, or the wipe, takes (0 to 5) |
 | `stagger` | `0.02` | roll: seconds between letters (0 to 0.5) |
 | `ease` | roll `"ease-in-out-quad"`, wipe `"out"` | a curve by name (see Curves); Elastic and Bounce ease out instead |
@@ -166,6 +167,16 @@ at once; a tap on a touch screen plays neither.
 states. Add `"animation": { "curve": "out", "duration": 0.25 }` to change how
 they move (press defaults to 0.12 s). Keyboard focus shows the hover state;
 Enter and Space show the press state.
+
+`"source"` plays it while another element is hovered or pressed: `"parent"`, the
+element holding it, or another element's id. A card's picture that grows while
+the card is hovered, and while the keyboard is on a link inside the card:
+
+```html
+<a class="card" href="/work">Work
+  <img src="phones.png" alt="" data-scrollwork='{"hover": {"scale": 1.06, "y": -12, "source": "parent"}}'>
+</a>
+```
 
 ## interactions
 
@@ -187,6 +198,7 @@ The full form, a list:
 | `delay` | `0` | seconds before the action (kept under reduced motion) |
 | `action.type` | `"none"` | `change` (to `state`), `scroll` (to `target`, with an `offset`), `url` (`url`, `newTab`), `navigate` (to `target`, with `preserveScroll`) and `swap` (to `target`), `overlay` (below), `back`, `close`, `custom` (below) |
 | `animation` | `{ "curve": "out", "duration": 0.25 }` | `kind: "instant"` for no motion; `curve: "custom"` with `bezier: [x1, y1, x2, y2]`; `curve: "spring"` with `spring: [stiffness, damping, mass]`; press defaults to 0.12 s |
+| `source` | the element itself | where the trigger is heard: `"parent"`, or another element's id. A `hover` heard on another element also plays while the keyboard is anywhere inside it |
 
 A `scroll` target is another element's `data-sw-id`; `offset` stops that many
 pixels above it (the height of a header that stays on top). When the target
@@ -221,6 +233,33 @@ is the page's own: Scrollwork binds its trigger and delay and calls the
 `custom(name, data, interaction, phase)` option, with `phase` `"start"`, and
 `"end"` when a `hover` or `press` that held it stops. Without the option,
 custom actions do nothing.
+
+## origin
+
+The point an element's motions turn and grow around: its appear, scroll, loop
+and states. `center` (the default), `top`, `bottom`, `left`, `right`,
+`top-left`, `top-right`, `bottom-left` or `bottom-right`.
+
+```html
+<div class="card" data-scrollwork='{"origin": "top", "scroll": {"from": {}, "to": {"rotate": 12}}}'>…</div>
+```
+
+Only the motion turns about it: an element your CSS rests at an angle stays
+where it is, and turns from there. A split scroll's own `origin` is the point
+its pieces turn about, each in its own box.
+
+## fade
+
+The element's edges fade to nothing, in px from each edge: a window that words
+or pictures scroll through, with no hard line where they are cut.
+
+```html
+<div class="window" data-scrollwork='{"fade": {"top": 40, "bottom": 40}}'>…</div>
+```
+
+`top`, `right`, `bottom` and `left`, from 0. Both directions at once keep only
+what both leave. It is a mask on the element, given back on stop. A loop's own
+`fade` fades the box around a marquee; this one fades the element itself.
 
 ## Curves
 

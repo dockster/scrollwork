@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.16.0
+
+- `origin`: the point an element's motions turn and grow around, the centre or
+  a side or a corner (`top`, `bottom-left`, …). A card that tips from its top
+  edge, a bar that grows from its start. Only the motion moves to that point:
+  an element resting at an angle in its CSS keeps its place when the engine
+  starts.
+- `fade`: an element's edges fade to nothing, in px from each edge, for a
+  window that words or pictures scroll through.
+- An interaction can be heard on another element, `source`: `"parent"` or an
+  id. A picture that grows while the card around it is hovered, or while the
+  keyboard is on a link inside the card. The `hover` and `press` shorthands
+  take it too.
+- A wipe can ripple: `direction: "pointer"` grows a circle of the colour from
+  where the pointer comes in and takes it back toward where it leaves (from
+  the centre for keyboard focus).
+- The core is 29.9 KB gzipped; its budget is 30 (was 29). Browser tests for each
+  in Chromium, WebKit and Firefox (756 checks).
+
 ## 1.15.1
 
 - An upright loop rests off screen. The children it turns back (and a

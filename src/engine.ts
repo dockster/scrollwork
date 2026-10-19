@@ -10,7 +10,7 @@
 
 import { bezier, clamp01, EASES, spring } from './easing.js';
 import { mountRollover } from './rollover.js';
-import { SR_ONLY, combine, degrees, identity, mix, NONE, paint, parseColour, putInline, BLANK, readBase, release, type Base, type State } from './style.js';
+import { SR_ONLY, combine, degrees, identity, mix, NONE, paint, parseColour, putInline, BLANK, readBase, release, setOrigin, type Base, type State } from './style.js';
 import type { AppearMotion, Interaction, InteractionAnimation, MotionControl, MotionItem, MotionKey, MotionOptions, MotionSpec, MotionState, PluginHandle, Signals } from './types.js';
 
 export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionControl {
@@ -474,6 +474,30 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
       restores.push(() => {
         bs.maskImage = had.mask;
         bs.webkitMaskImage = had.webkit;
+      });
+    }
+    // the point its motions turn and grow around
+    if (item.origin && item.origin !== 'center') {
+      setOrigin(el, item.origin);
+      restores.push(() => setOrigin(el, undefined));
+    }
+    // its edges fade out: one gradient for each axis that fades, both kept where they meet
+    const fd = item.fade;
+    if (fd) {
+      const ramp = (to: string, a = 0, b = 0) => (a || b ? 'linear-gradient(to ' + to + ', transparent, #000 ' + a + 'px, #000 calc(100% - ' + b + 'px), transparent)' : '');
+      const masks = [ramp('bottom', fd.top, fd.bottom), ramp('right', fd.left, fd.right)].filter(Boolean);
+      const es = el.style as CSSStyleDeclaration & { webkitMaskImage?: string; webkitMaskComposite?: string };
+      const had = { mask: es.maskImage, webkit: es.webkitMaskImage, comp: es.maskComposite, wcomp: es.webkitMaskComposite };
+      es.maskImage = es.webkitMaskImage = masks.join(', ');
+      if (masks.length > 1) {
+        es.maskComposite = 'intersect';
+        es.webkitMaskComposite = 'source-in';
+      }
+      restores.push(() => {
+        es.maskImage = had.mask;
+        es.webkitMaskImage = had.webkit;
+        es.maskComposite = had.comp;
+        es.webkitMaskComposite = had.wcomp;
       });
     }
   }
@@ -1583,7 +1607,10 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
       win.requestAnimationFrame(step);
     };
 
-    const bind = (el: HTMLElement, ix: Interaction, start: () => void, end?: () => void) => {
+    const bind = (own: HTMLElement, ix: Interaction, start: () => void, end?: () => void) => {
+      // heard on another element: the one holding it, or one named by its id (a card hovered moves its picture)
+      const el = (ix.source && (ix.source === 'parent' ? own.parentElement : find(ix.source))) || own;
+      const away = el !== own;
       switch (ix.trigger) {
         case 'click': {
           const act = ix.action.type;
@@ -1629,18 +1656,23 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
         case 'hover':
           on(el, 'pointerenter', start);
           on(el, 'pointerleave', () => end && end());
-          // keyboard focus gets the same feedback as the pointer
-          on(el, 'focus', () => {
+          // keyboard focus gets the same feedback as the pointer: on another element, focus anywhere inside it
+          on(el, away ? 'focusin' : 'focus', (ev) => {
             // :focus-visible is Safari 15.4 and Firefox 85: before that, any focus shows it
             let visible = true;
             try {
-              visible = el.matches(':focus-visible');
+              visible = ((away ? ev.target : el) as HTMLElement).matches(':focus-visible');
             } catch {
               /* an older browser: the selector is unknown */
             }
             if (visible) start();
           });
-          on(el, 'blur', () => end && end());
+          on(el, away ? 'focusout' : 'blur', (ev) => {
+            // moving from one control to another inside it is still inside it
+            const to = (ev as FocusEvent).relatedTarget as Node | null;
+            if (away && to && el.contains(to)) return;
+            if (end) end();
+          });
           break;
         case 'press':
           on(el, 'pointerdown', (ev) => claim(ev, el) && start());

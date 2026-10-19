@@ -305,6 +305,93 @@ for (const name of BROWSERS) {
     await ctx.close();
   }
 
+  // ── 1.16.0: a pivot for an element's motion (its corner stays put as it turns; an element resting at an angle
+  // does not move when the engine starts), an edge fade, a hover heard on the card around a picture, and the ripple ──
+  {
+    const { p, ctx, errors } = await page(
+      browser,
+      `<div id="tilted" style="position:absolute;left:300px;top:80px;width:120px;height:60px;background:#888;rotate:12deg"><i id="tc" style="position:absolute;left:0;top:0;width:2px;height:2px"></i></div>
+       <div id="pv" style="position:absolute;left:100px;top:300px;width:200px;height:80px;background:#444"><i id="pc" style="position:absolute;left:0;top:0;width:2px;height:2px"></i></div>
+       <div id="fd" style="position:absolute;left:500px;top:300px;width:200px;height:200px;background:#000"></div>
+       <div id="card" style="position:absolute;left:100px;top:450px;width:300px;height:180px;background:#ddd"><button id="lnk">Open</button><div id="pic" style="position:absolute;right:10px;bottom:10px;width:80px;height:80px;background:#06c"></div></div>
+       <button id="rip" style="position:absolute;left:500px;top:560px;width:200px;height:56px;border:0;background:#111;color:#fff">Let's talk</button>`
+    );
+    const corner = (id) => p.evaluate((i) => { const r = document.getElementById(i).getBoundingClientRect(); return [Math.round(r.left), Math.round(r.top)]; }, id);
+    const tilted0 = await corner('tc');
+    await p.evaluate(() => {
+      const ix = { id: 'h', trigger: 'hover', delay: 0, action: { type: 'change', state: { x: 0, y: 0, scale: 1.3, rotate: 0, opacity: 1, blur: 0 } }, animation: { kind: 'animate', curve: 'linear', duration: 0.2 }, source: 'parent' };
+      window.sw = window.Scrollwork.start(
+        {
+          items: [
+            { id: 'tilted', text: false, origin: 'top', loop: { from: { x: 0, y: 0, scale: 1, rotate: 0, opacity: 1, blur: 0 }, to: { x: 0, y: 0, scale: 1, rotate: 0, opacity: 1, blur: 0 }, duration: 4, ease: 'linear', yoyo: false, fade: 0, upright: false, flipbook: 0 } },
+            { id: 'pv', text: false, origin: 'top-left', appear: { effect: 'custom', split: 'none', duration: 2, delay: 0, stagger: 0, ease: 'linear', offset: 0, replay: false, from: { x: 0, y: 0, scale: 1, rotate: 60, opacity: 1, blur: 0 } } },
+            { id: 'fd', text: false, fade: { top: 30, bottom: 30, left: 20 } },
+            { id: 'pic', text: false, interactions: [ix] },
+            { id: 'rip', text: false, rollover: [{ effect: 'wipe', direction: 'pointer', color: 'rgb(212, 255, 58)', ink: 'rgb(0, 0, 0)', duration: 0.6, stagger: 0, ease: 'linear' }] },
+          ],
+          smooth: false,
+        },
+        { attr: 'id', root: document.body, scroller: null, reduced: false, split: false }
+      );
+    });
+    await sleep(300);
+    check(tag('pivot: an element resting at an angle keeps its place when the engine starts'), JSON.stringify(await corner('tc')) === JSON.stringify(tilted0), `${tilted0} -> ${await corner('tc')}`);
+    const pv0 = await p.evaluate(() => ({ t: document.getElementById('pv').style.transform }));
+    const c1 = await corner('pc');
+    await sleep(600);
+    const c2 = await corner('pc');
+    // the 2 px marker turns with it, so its own box moves a pixel or two; turned about its centre, the corner would move ~100 px
+    check(tag('pivot: it turns about its top-left corner, which stays put'), /translate\(-50%, -50%\).*rotate\(/.test(pv0.t) && Math.abs(c1[0] - 100) <= 3 && Math.abs(c1[1] - 300) <= 3 && Math.abs(c2[0] - 100) <= 3 && Math.abs(c2[1] - 300) <= 3, `${pv0.t} | ${c1} | ${c2}`);
+    const mask = await p.evaluate(() => { const s = getComputedStyle(document.getElementById('fd')); return { img: s.maskImage || s.webkitMaskImage, comp: s.maskComposite || s.webkitMaskComposite }; });
+    check(tag('fade: the edges named fade, one gradient for each axis, kept where they meet'), (mask.img.match(/linear-gradient/g) || []).length === 2 && /intersect|source-in/.test(mask.comp), JSON.stringify(mask));
+    const scaleOf = () => p.evaluate(() => getComputedStyle(document.getElementById('pic')).scale);
+    await p.mouse.move(130, 470);
+    await sleep(350);
+    const over = await scaleOf();
+    await p.mouse.move(900, 50);
+    await sleep(350);
+    const away = await scaleOf();
+    check(tag('source: hovering the card, not the picture, moves the picture, and leaving puts it back'), parseFloat(over) > 1.25 && (away === 'none' || parseFloat(away) === 1), `${over} -> ${away}`);
+    // a key first, so the browser treats the focus as the keyboard's (WebKit's Tab skips buttons by default, as Safari's)
+    await p.keyboard.press('Shift');
+    await p.evaluate(() => document.getElementById('lnk').focus());
+    await sleep(350);
+    const focused = await p.evaluate(() => [document.activeElement?.id, getComputedStyle(document.getElementById('pic')).scale]);
+    check(tag('source: the keyboard inside the card moves it too'), focused[0] === 'lnk' && parseFloat(focused[1]) > 1.25, JSON.stringify(focused));
+    await p.evaluate(() => document.activeElement.blur());
+    // the ripple: in from the left edge's middle; halfway through, the circle is centred on that point
+    await p.mouse.move(470, 588);
+    await p.mouse.move(505, 588, { steps: 2 });
+    await sleep(300);
+    const mid = await p.evaluate(() => { const s = getComputedStyle(document.getElementById('rip')); const size = parseFloat(s.backgroundSize); const [x, y] = s.backgroundPosition.split(',')[0].split(' ').map(parseFloat); return { size, cx: x + size / 2, cy: y + size / 2 }; });
+    check(tag('ripple: it grows as a circle centred where the pointer came in'), mid.size > 20 && Math.abs(mid.cx - 5) < 4 && Math.abs(mid.cy - 28) < 4, JSON.stringify(mid));
+    await sleep(500);
+    const full = await p.evaluate(() => ({ size: parseFloat(getComputedStyle(document.getElementById('rip')).backgroundSize), ink: getComputedStyle(document.getElementById('rip')).color }));
+    check(tag('ripple: it covers the button, the words in their hover colour'), full.size >= 2 * Math.hypot(200, 56) - 2 && full.ink === 'rgb(0, 0, 0)', JSON.stringify(full));
+    await p.mouse.move(695, 570);
+    await p.mouse.move(760, 540, { steps: 2 });
+    await sleep(300);
+    const out = await p.evaluate(() => { const s = getComputedStyle(document.getElementById('rip')); const size = parseFloat(s.backgroundSize); const [x, y] = s.backgroundPosition.split(',')[0].split(' ').map(parseFloat); return { size, cx: x + size / 2, cy: y + size / 2 }; });
+    check(tag('ripple: leaving, it shrinks toward where the pointer went out'), out.size < full.size && out.cx > 150, JSON.stringify(out));
+    // inside a parent scaled to half (a zoomed canvas): the circle is still centred on the point, in the button's own px
+    await p.mouse.move(900, 50);
+    await sleep(700);
+    // the page scaled to half from its corner, as a zoomed canvas is: the button is at 250, 280 on screen, 100 by 28
+    await p.evaluate(() => { document.body.style.transformOrigin = '0 0'; document.body.style.transform = 'scale(0.5)'; });
+    await p.mouse.move(244, 294);
+    await p.mouse.move(256, 294, { steps: 2 });
+    await sleep(300);
+    const zoomed = await p.evaluate(() => { const s = getComputedStyle(document.getElementById('rip')); const size = parseFloat(s.backgroundSize); const [x, y] = s.backgroundPosition.split(',')[0].split(' ').map(parseFloat); return { size, cx: x + size / 2, cy: y + size / 2 }; });
+    check(tag('ripple: scaled on screen, it still grows from the point the pointer came in, in its own px'), zoomed.cx > -2 && zoomed.cx < 16 && Math.abs(zoomed.cy - 28) < 4, JSON.stringify(zoomed));
+    await p.evaluate(() => { document.body.style.transform = ''; document.body.style.transformOrigin = ''; });
+    await p.evaluate(() => window.sw.stop());
+    const back = await p.evaluate(() => ({ mask: document.getElementById('fd').style.maskImage, t: document.getElementById('pv').style.transform, bg: document.getElementById('rip').style.backgroundImage }));
+    // the button's own inline background (a shorthand, read back as initial) is what comes back
+    check(tag('stop: the fade, the pivot and the ripple are taken away'), !back.mask && !back.t && !/gradient/.test(back.bg), JSON.stringify(back));
+    check(tag('no errors (1.16.0)'), errors.length === 0, errors.join(' | '));
+    await ctx.close();
+  }
+
   // ── a curve outside 0 to 1 ──
   {
     const { p, ctx, errors } = await page(browser, `<div id="t" data-m="t" style="width:100px;height:40px;background:#888">hover</div>`);

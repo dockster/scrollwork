@@ -181,7 +181,16 @@ export const NONE: Base = { t: [], s: [], rot: 0, opacity: 1, filter: '', bg: [0
  * value no longer matches what was written was changed by the page since,
  * and that is the author's value from then on.
  */
-type Held = HTMLElement & { __scrollwork?: Inline; __scrollworkPaint?: Inline; __scrollworkHolds?: number; __scrollworkBare?: boolean };
+type Held = HTMLElement & { __scrollwork?: Inline; __scrollworkPaint?: Inline; __scrollworkHolds?: number; __scrollworkBare?: boolean; __scrollworkOrigin?: [number, number] };
+
+/** an origin's place from the centre, in percent of the element's own size */
+const AT: Record<string, [number, number]> = { top: [0, -50], bottom: [0, 50], left: [-50, 0], right: [50, 0], 'top-left': [-50, -50], 'top-right': [50, -50], 'bottom-left': [-50, 50], 'bottom-right': [50, 50] };
+/** The point an element's motions turn and grow around (types.ts MotionOrigin); the centre, as CSS has it, when unset. */
+export function setOrigin(el: HTMLElement, origin: string | undefined) {
+  const held = el as Held;
+  if (origin && AT[origin]) held.__scrollworkOrigin = AT[origin];
+  else delete held.__scrollworkOrigin;
+}
 const KEYS = ['translate', 'scale', 'rotate', 'transform', 'opacity', 'filter', 'clipPath', 'backgroundColor', 'color', 'backgroundImage', 'src'] as const;
 const isImg = (el: HTMLElement): el is HTMLImageElement => el.tagName === 'IMG';
 const current = (el: HTMLElement): Inline => ({
@@ -328,14 +337,27 @@ export function paint(el: HTMLElement, s: State, b: Base) {
     const ty = b.t[1] ? 'calc(' + b.t[1] + ' + ' + y + ')' : s.yp ? 'calc(' + y + ')' : y;
     el.style.translate = tx + ' ' + ty + (b.t[2] ? ' ' + b.t[2] : '');
   } else el.style.translate = b.inline.translate;
-  if (s.scale !== 1 || s.sx !== 1 || s.sy !== 1) {
-    const sx = (b.s[0] ?? 1) * s.scale * s.sx;
-    const sy = (b.s[1] ?? b.s[0] ?? 1) * s.scale * s.sy;
-    el.style.scale = sx + ' ' + sy + (b.s[2] !== undefined ? ' ' + b.s[2] : '');
-  } else el.style.scale = b.inline.scale;
-  el.style.rotate = s.rotate && !Number.isNaN(b.rot) ? b.rot + s.rotate + 'deg' : b.inline.rotate;
-  // 3D: a perspective and the tips, in front of whatever transform the element has of its own
-  el.style.transform = s.rx || s.ry ? 'perspective(' + (s.pz || 1000) + 'px) rotateX(' + s.rx + 'deg) rotateY(' + s.ry + 'deg)' + (b.inline.transform ? ' ' + b.inline.transform : '') : b.inline.transform;
+  // around another point than the centre: the motion's turn, growth and 3D tips go into a transform around that
+  // point, inside the element's own translate, rotate and scale, which stay as the page has them (a card resting at
+  // an angle keeps its place)
+  const o = (el as Held).__scrollworkOrigin;
+  if (o) {
+    const turn = s.rotate || s.scale !== 1 || s.sx !== 1 || s.sy !== 1 || s.rx || s.ry;
+    el.style.scale = b.inline.scale;
+    el.style.rotate = b.inline.rotate;
+    el.style.transform = turn
+      ? 'translate(' + o[0] + '%, ' + o[1] + '%) ' + (s.rx || s.ry ? 'perspective(' + (s.pz || 1000) + 'px) rotateX(' + s.rx + 'deg) rotateY(' + s.ry + 'deg) ' : '') + 'rotate(' + s.rotate + 'deg) scale(' + s.scale * s.sx + ', ' + s.scale * s.sy + ') translate(' + -o[0] + '%, ' + -o[1] + '%)' + (b.inline.transform ? ' ' + b.inline.transform : '')
+      : b.inline.transform;
+  } else {
+    if (s.scale !== 1 || s.sx !== 1 || s.sy !== 1) {
+      const sx = (b.s[0] ?? 1) * s.scale * s.sx;
+      const sy = (b.s[1] ?? b.s[0] ?? 1) * s.scale * s.sy;
+      el.style.scale = sx + ' ' + sy + (b.s[2] !== undefined ? ' ' + b.s[2] : '');
+    } else el.style.scale = b.inline.scale;
+    el.style.rotate = s.rotate && !Number.isNaN(b.rot) ? b.rot + s.rotate + 'deg' : b.inline.rotate;
+    // 3D: a perspective and the tips, in front of whatever transform the element has of its own
+    el.style.transform = s.rx || s.ry ? 'perspective(' + (s.pz || 1000) + 'px) rotateX(' + s.rx + 'deg) rotateY(' + s.ry + 'deg)' + (b.inline.transform ? ' ' + b.inline.transform : '') : b.inline.transform;
+  }
   el.style.opacity = s.opacity < 0.999 ? String(Math.max(0, b.opacity * s.opacity)) : b.inline.opacity;
   el.style.filter = s.blur > 0.01 ? 'blur(' + s.blur + 'px)' + (b.filter ? ' ' + b.filter : '') : b.inline.filter;
   el.style.clipPath =

@@ -246,8 +246,12 @@ export interface CursorMotion {
 export interface RolloverMotion {
   /** scramble: each letter flickers through random characters, one after another, before landing on its own */
   effect: 'roll' | 'wipe' | 'scramble';
-  /** where it moves. roll: up (out the top, the copy from below) or down; wipe: the way the colour travels (right starts at the left edge), or center, outward */
-  direction: 'up' | 'down' | 'left' | 'right' | 'center';
+  /**
+   * where it moves. roll: up (out the top, the copy from below) or down; wipe: the way the colour travels (right
+   * starts at the left edge), center, outward, or `pointer`: a ripple, a circle of the colour growing from where the
+   * pointer comes in and going back toward where it leaves (from the centre for the keyboard's focus)
+   */
+  direction: 'up' | 'down' | 'left' | 'right' | 'center' | 'pointer';
   /** seconds each letter, or the wipe, takes */
   duration: number;
   /** roll: seconds between letters */
@@ -338,6 +342,22 @@ export interface Interaction {
   delay: number;
   action: InteractionAction;
   animation: InteractionAnimation;
+  /**
+   * where the trigger is heard, when not on the element itself: `parent` (the element holding it), or the id of
+   * another element. A card's picture that moves while the card is hovered (and while the keyboard is inside it).
+   */
+  source?: string;
+}
+
+/** The point an element turns and grows around: its centre, a side's middle, or a corner. */
+export type MotionOrigin = 'center' | 'top' | 'bottom' | 'left' | 'right' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+
+/** px each edge of an element fades out over, to nothing at the edge (a window whose content scrolls through it) */
+export interface EdgeFade {
+  top?: number;
+  right?: number;
+  bottom?: number;
+  left?: number;
 }
 
 /**
@@ -369,6 +389,10 @@ export interface MotionItem {
   interactions?: Interaction[];
   /** effects played by a plugin given to `start()` (scrollwork/fx); nothing without one */
   fx?: FxSpec[];
+  /** the point its motions turn and grow around (its rotate, scale and 3D tips); the centre when unset. Its own resting rotation stays as it is */
+  origin?: MotionOrigin;
+  /** its edges fade out (a mask), for as long as the engine runs */
+  fade?: EdgeFade;
 }
 
 /** What the engine knows about an element this frame, for a plugin. */

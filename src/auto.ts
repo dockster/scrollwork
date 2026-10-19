@@ -4,6 +4,7 @@
 //   <h1 data-scrollwork='{"appear": {"effect": "mask", "split": "words"}}'>…</h1>
 //   <img data-scrollwork='{"scroll": {"speed": 30}}'>
 //   <a data-scrollwork='{"hover": {"scale": 1.05}}'>…</a>
+//   <img data-scrollwork='{"hover": {"scale": 1.06, "source": "parent"}}'> (moves while its card is hovered)
 //
 // `hover` and `press` are shorthands for a change on that trigger; the full
 // `interactions` list is accepted as well.
@@ -69,13 +70,15 @@ export function readPage(root: HTMLElement, warn = true, named: HTMLElement[] = 
     for (const [trigger, duration] of [['hover', 0.25], ['press', 0.12]] as const) {
       const v = raw[trigger];
       if (!v || typeof v !== 'object') continue;
-      const o = v as Loose;
+      // "source": heard on another element ("parent", or an id): {"hover": {"scale": 1.06, "source": "parent"}}
+      const { source, ...o } = v as Loose;
       extra.push({
         id: trigger,
         trigger,
         delay: 0,
         action: { type: 'change', state: state(o.state ?? o, notes, `${label}.${trigger}`) },
         animation: readAnimation(o.animation, notes, `${label}.${trigger}.animation`, duration),
+        ...(typeof source === 'string' && source ? { source } : {}),
       });
     }
     if (extra.length) item.interactions = [...(item.interactions || []), ...extra];
