@@ -1,6 +1,6 @@
 {
   "name": "scrollwork",
-  "version": "1.15.0",
+  "version": "1.15.1",
   "description": "Scroll, appear, pin and interaction motion for the web, from JSON or data attributes, plus animate(), timeline(), inView() and scroll(). No dependencies, respects reduced motion.",
   "type": "module",
   "main": "./dist/scrollwork.mjs",
@@ -86,7 +86,7 @@
   ],
   "author": "uxspot.io",
   "license": "MIT",
-  "homepage": "https://uxspot.io/scrollwork",
+  "homepage": "https://uxdeck.app/scrollwork",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/dockster/scrollwork.git"

@@ -282,6 +282,29 @@ for (const name of BROWSERS) {
     await ctx.close();
   }
 
+  // ── an upright ring rests off screen (1.15.1): the children it turns back are its own writes, not a change to the
+  // page; before, each one woke the engine for another frame, for ever, on screen or off ──
+  {
+    const kids = Array.from({ length: 6 }, (_, i) => `<i style="position:absolute;left:${40 + i * 20}px;top:40px;width:16px;height:16px;background:#000"></i>`).join('');
+    const { p, ctx, errors } = await page(
+      browser,
+      `<div id="ring" style="position:relative;width:200px;height:200px" data-scrollwork='{"loop":{"to":{"rotate":360},"duration":6,"upright":true}}'>${kids}</div><div style="height:3000px"></div>`,
+      { counting: true }
+    );
+    await p.evaluate(() => (window.sw = window.Scrollwork.auto()));
+    await sleep(500);
+    const turning = await p.evaluate(() => [getComputedStyle(document.getElementById('ring')).rotate, getComputedStyle(document.querySelector('#ring i')).rotate]);
+    check(tag('upright ring: on screen it turns and its children turn back'), parseFloat(turning[0]) > 0 && Math.abs(parseFloat(turning[0]) + parseFloat(turning[1])) < 1, JSON.stringify(turning));
+    await p.evaluate(() => window.scrollTo(0, 2000));
+    await sleep(800);
+    const f0 = await p.evaluate(() => window.__frames);
+    await sleep(1000);
+    const f1 = await p.evaluate(() => window.__frames);
+    check(tag('upright ring: scrolled away, the loop rests'), f1 - f0 <= 2, `${f1 - f0} frames in a second`);
+    check(tag('no errors (upright rest)'), errors.length === 0, errors.join(' | '));
+    await ctx.close();
+  }
+
   // ── a curve outside 0 to 1 ──
   {
     const { p, ctx, errors } = await page(browser, `<div id="t" data-m="t" style="width:100px;height:40px;background:#888">hover</div>`);

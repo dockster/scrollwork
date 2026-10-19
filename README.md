@@ -4,7 +4,7 @@ Scroll, appear, pin and interaction motion for the web. Describe it in HTML
 with a `data-scrollwork` attribute, or in code with `animate()`, `timeline()`,
 `inView()` and `scroll()`.
 
-- **About 28 KB gzipped, no dependencies.** One file for a `<script>` tag, or
+- **About 29 KB gzipped, no dependencies.** One file for a `<script>` tag, or
   an ES module for your bundler, with TypeScript types. WebGL effects are a
   separate, optional file (`scrollwork/fx`, about 10 KB), and so are flip,
   morph, motion paths, dragging and sideways sections (`scrollwork/extras`,
@@ -274,6 +274,9 @@ sideways('.work', { snap: 'panels', smooth: 0.2 });
   a share, or a list), `onUpdate`. It returns `progress`, `offset`,
   `watch(target, handler, { range })` for something inside passing across the
   screen, `refresh()` and `stop()`. Keyboard focus inside scrolls it into view.
+  The section's height is set from the track's, so give the track a height of
+  its own: one that follows the section's (`height: 100%`) grows with each
+  measure and never rests.
 
 ## Effects (scrollwork/fx)
 

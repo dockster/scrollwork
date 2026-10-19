@@ -357,6 +357,8 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
   if (!opts.seekOnly) root.ownerDocument.documentElement.classList.remove('sw-pending');
   const entries: Entry[] = [];
   const byEl = new Map<HTMLElement, Entry>();
+  /** children the engine writes without moving them: an upright loop's (turned back) and a flipbook's (shown one at a time) */
+  const written = new Set<HTMLElement>();
   for (const item of spec.items) {
     const el = find(item.id);
     if (!el) continue;
@@ -441,6 +443,7 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
         if (!(c instanceof win.HTMLElement)) continue;
         const cr = win.getComputedStyle(c).rotate;
         entry.kids.push({ el: c, rot: cr && cr !== 'none' ? degrees(cr) : 0, inline: c.style.rotate });
+        written.add(c);
       }
       const kids = entry.kids;
       restores.push(() => {
@@ -451,6 +454,7 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
     if (item.loop && item.loop.flipbook > 0) {
       const kids = Array.from(el.children).filter((c): c is HTMLElement => c instanceof win.HTMLElement);
       const had = kids.map((k) => k.style.visibility);
+      kids.forEach((k) => written.add(k));
       entry.flip = { kids, had, at: -1 };
       restores.push(() => kids.forEach((k, i) => (k.style.visibility = had[i])));
     }
@@ -1835,7 +1839,7 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
     if (typeof MutationObserver !== 'undefined') {
       const ours = (n: Node) => {
         const el = n as HTMLElement;
-        return byEl.has(el) || (typeof el.className === 'string' && el.className.indexOf('ux-motion-') === 0);
+        return byEl.has(el) || written.has(el) || (typeof el.className === 'string' && el.className.indexOf('ux-motion-') === 0);
       };
       mo = new MutationObserver((records) => {
         for (const r of records) {

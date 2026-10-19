@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.15.1
+
+- An upright loop rests off screen. The children it turns back (and a
+  flipbook's, shown one at a time) are the engine's own writes, but its
+  watcher took each one for a change to the page and woke for another frame:
+  a ring of pictures asked for 60 frames a second for as long as the page was
+  open, on screen or off. They are now skipped like every element the engine
+  moves. Browser test "upright ring: scrolled away, the loop rests" (0 frames
+  in a second; 61 before) in Chromium, WebKit and Firefox.
+- The README's size line says about 29 KB (it said 28), and the package's
+  homepage is https://uxdeck.app/scrollwork (it pointed at a page that does not
+  exist). The README says a `sideways()` track needs a height of its own: one
+  that follows the section's grows with each measure and never rests.
+
 ## 1.15.0
 
 - scrollwork/fx `bulge`: the picture, or an element's own words, swells towards
