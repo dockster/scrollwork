@@ -193,6 +193,7 @@ export function readScroll(v: unknown, notes: Notes, what: string): ScrollMotion
     ...(s.slices !== undefined ? { slices: Math.round(num(s.slices, 4, notes, what + '.slices', 2, 12)) } : {}),
     ...(s.whole === true ? { whole: true } : {}),
     ...(s.mask !== undefined ? { mask: oneOf(s.mask, MASKS, 'bottom', notes, what + '.mask') } : {}),
+    ...(s.flipbook === true || s.flipbook === 'blend' ? { flipbook: s.flipbook } : s.flipbook !== undefined && s.flipbook !== false ? (notes.add(`${what}.flipbook: expected true or "blend"`), {}) : {}),
   };
 }
 
@@ -428,6 +429,8 @@ export function readItem(v: unknown, notes: Notes, i: number): MotionItem | null
       if (Object.values(f).some((x) => x > 0)) item.fade = f;
     }
   }
+  if (v.hidden === true) item.hidden = true;
+  else if (v.hidden !== undefined && v.hidden !== false) notes.add(`${what}.hidden: expected true or false`);
   return item;
 }
 

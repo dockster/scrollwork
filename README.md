@@ -121,7 +121,7 @@ defaults, is in [docs/REFERENCE.md](docs/REFERENCE.md).
 | Key | What it does |
 |---|---|
 | `appear` | Plays once the element comes into view (its top `offset`% up the screen, or on screen at all once the page is scrolled to its end): `fade`, `slide-up`, `mask`, `blur`, `scale` or a `custom` start state. Text can be split into `lines`, `words` or letters (`chars`), with a stagger. |
-| `scroll` | Follows the scroll position: parallax (`speed`, with `cover` to keep a picture over its clipped box), or `from` and `to` states scrubbed across the element's passage, or across its own pin (`range: "hold"`). States can tip in 3D (`rotateX`, `rotateY`, `perspective`). |
+| `scroll` | Follows the scroll position: parallax (`speed`, with `cover` to keep a picture over its clipped box), or `from` and `to` states scrubbed across the element's passage, or across its own pin (`range: "hold"`). States can tip in 3D (`rotateX`, `rotateY`, `perspective`). A `flipbook` shows the children one at a time, picked by the scroll, stepped or blended: a product turning as the page goes by. |
 | `pin` | Holds the element in place for a stretch of scrolling. |
 | `loop` | A state played over and over while on screen: a marquee (with `fade` for its edges), a spin (with `upright` to keep the children level), a `flipbook` of the children. |
 | `cursor` | The element follows the pointer as the page's cursor, with a `lag`, a `links` state over links, the page's own cursor hidden. |
@@ -130,6 +130,7 @@ defaults, is in [docs/REFERENCE.md](docs/REFERENCE.md).
 | `rollover` | A button's hover effect: `roll` sends the label's letters out one after another as a copy rolls in (`direction` up or down, `stagger`), `wipe` sweeps a `color` across it from a side or the centre while its words take an `ink`, or with `direction: "pointer"` ripples it: a circle of the colour grows from where the pointer comes in and goes back toward where it leaves. `scramble` flickers each letter through random characters (`turns`, `glyphs`) before it lands on its own, with a `cursor` block and random `colors` if asked, and plays on hover, as the text comes into view, or both (`on`). Played by the nearest link or button around it, or by keyboard focus; one of each, as a list, on the same element. |
 | `interactions` | The full list: click, key, delay, a video ending and more, changing state, scrolling to an element, or calling your own `custom` action. Each can be heard on another element (`source`). |
 | `origin` | The point its motions turn and grow around: `center` (the default), `top`, `bottom`, `left`, `right` or a corner (`top-left`, …). A card that tips from its top edge. Its own resting rotation stays as it is. |
+| `hidden` | Hidden at rest, brought in by its interactions: a glow that shows while the card around it is hovered (`"hover": {"opacity": 1, "source": "parent"}`). |
 | `fade` | Its edges fade to nothing, in px from each: `{ "top": 60, "bottom": 60 }` for a window that words scroll through. |
 
 A **state** is `{ x, y, scale, rotate, opacity, blur }`, in px, a multiple,

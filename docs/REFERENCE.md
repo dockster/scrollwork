@@ -69,6 +69,7 @@ Follows the scroll position.
 | `whole` | `false` | slices: the slices move whole, as strips; otherwise the words move inside slices that stay in place |
 | `order`, `outward`, `vary`, `origin` | `start`, off, `0`, `center` | children, slices, and (1.15) a text's `words` or `chars`: which piece goes first (`start`, `end`, `center`, `edges`, `random`); each starting away from the centre on its side (a text's pieces on one axis as far as each is from the centre); how much each start differs (a text's pieces may also move the other way, scattering); the point each turns about (`top`, `bottom`, `left`, `right`, or `behind`, 1em behind it in depth) |
 | `mask` | none | (1.15) a text's lines, words or letters: each starts out of its own box on this side (`top`, `bottom`, `left`, `right`), hidden by it, and slides into view; letters each get a box of their own. On top of `from` |
+| `flipbook` | off | (1.17) the element's children are frames shown one at a time across the range, picked by the scroll: a product turning as the page goes by. `true` steps from frame to frame (30 to 60 renders); `"blend"` crosses each into the next (a few views, stacked in one place: the later one is drawn over the earlier). The range and `ease` work as for any scroll; on a pin, `range: "hold"`. Under reduced motion the first frame stays |
 
 ## loop
 
@@ -247,6 +248,22 @@ and states. `center` (the default), `top`, `bottom`, `left`, `right`,
 Only the motion turns about it: an element your CSS rests at an angle stays
 where it is, and turns from there. A split scroll's own `origin` is the point
 its pieces turn about, each in its own box.
+
+## hidden
+
+(1.17) The element is hidden at rest and its interactions bring it in: a glow
+that shows while a card is hovered, a caption on focus. Their opacity counts
+from nothing up instead of as a share of the element's own.
+
+```html
+<div class="card">
+  <div class="glow" data-scrollwork='{"hidden": true, "hover": {"opacity": 1, "source": "parent"}}'></div>
+</div>
+```
+
+Without interactions it simply stays hidden. Before the script runs the
+element shows as its CSS draws it; hide it there too if it must never flash.
+Given back on stop.
 
 ## fade
 

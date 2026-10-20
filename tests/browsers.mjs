@@ -305,6 +305,51 @@ for (const name of BROWSERS) {
     await ctx.close();
   }
 
+
+  // ── 1.17.0: a flipbook picked by the scroll (stepped and blended), and a layer hidden until its card is hovered ──
+  {
+    const frames = (id, mode) => `<div id="${id}" style="position:relative;height:300px;width:300px" data-scrollwork='{"scroll":{"flipbook":${JSON.stringify(mode)},"range":"through"}}'>${[0, 1, 2, 3, 4].map((i) => `<div style="position:absolute;inset:0;background:hsl(${i * 60},70%,50%)">${i}</div>`).join('')}</div>`;
+    const body = `<div style="height:900px"></div>${frames('step', true)}<div style="height:200px"></div>${frames('mix', 'blend')}
+      <div id="card" style="margin-top:200px;width:300px;height:200px;position:relative;background:#eee"><div id="glow" style="position:absolute;inset:0;background:gold" data-scrollwork='{"hidden":true,"hover":{"opacity":1,"source":"parent"}}'></div></div><div style="height:1400px"></div>`;
+    const { p, ctx, errors } = await page(browser, body, { script: '<script src="/scrollwork.min.js" data-auto></script>' });
+    await sleep(300);
+    const shown = (id) => p.evaluate((i) => [...document.getElementById(i).children].map((c) => (c.style.visibility === 'hidden' ? '-' : c.style.opacity || '1')).join(' '), id);
+    const atY = async (y) => { await p.evaluate((v) => window.scrollTo(0, v), y); await sleep(250); };
+    await atY(0);
+    const s0 = await shown('step');
+    await atY(1100);
+    const s1 = await shown('step');
+    check(tag('scroll flipbook: one frame shows at a time, a later one further down the page'), s0.split(' ').filter((x) => x !== '-').length === 1 && s0 !== s1 && s1.split(' ').filter((x) => x !== '-').length === 1, `${s0} | ${s1}`);
+    await atY(1500);
+    const m1 = await shown('mix');
+    const vis = m1.split(' ').filter((x) => x !== '-');
+    check(tag('scroll flipbook blend: two neighbours show, the later one part-way in'), vis.length >= 1 && vis.length <= 2 && (vis.length === 1 || (parseFloat(vis[1]) > 0 && parseFloat(vis[1]) < 1)), m1);
+    const glow0 = await p.evaluate(() => getComputedStyle(document.getElementById('glow')).opacity);
+    await p.evaluate(() => document.getElementById('card').scrollIntoView({ block: 'center' }));
+    await sleep(200);
+    const b = await p.locator('#card').boundingBox();
+    await p.mouse.move(b.x + 10, b.y + 10);
+    await sleep(450);
+    const glow1 = await p.evaluate(() => getComputedStyle(document.getElementById('glow')).opacity);
+    await p.mouse.move(2, 2);
+    await sleep(450);
+    const glow2 = await p.evaluate(() => getComputedStyle(document.getElementById('glow')).opacity);
+    check(tag('hidden: out of sight at rest, in on the card\'s hover, out again on leaving'), parseFloat(glow0) === 0 && parseFloat(glow1) > 0.95 && parseFloat(glow2) === 0, `${glow0} -> ${glow1} -> ${glow2}`);
+    await p.evaluate(() => window.scrollwork && window.scrollwork.stop && window.scrollwork.stop());
+    const back = await p.evaluate(() => [document.getElementById('glow').style.opacity, [...document.getElementById('step').children].map((c) => c.style.visibility).join(',')]);
+    check(tag('stop: the frames and the hidden layer are given back'), back[0] === '' && !/hidden/.test(back[1]), JSON.stringify(back));
+    check(tag('1.17 page: no errors'), errors.length === 0, errors.join(' | '));
+    await ctx.close();
+  }
+  {
+    const { p, ctx } = await page(browser, `<div id="rm" style="position:relative;height:300px" data-scrollwork='{"scroll":{"flipbook":"blend"}}'><div>a</div><div>b</div><div>c</div></div><div style="height:2000px"></div>`, { reduced: true, script: '<script src="/scrollwork.min.js" data-auto></script>' });
+    await sleep(300);
+    await p.evaluate(() => window.scrollTo(0, 600));
+    await sleep(250);
+    const v = await p.evaluate(() => [...document.getElementById('rm').children].map((c) => c.style.visibility === 'hidden' ? '-' : 'on').join(' '));
+    check(tag('scroll flipbook under reduced motion: the first frame stays'), v === 'on - -', v);
+    await ctx.close();
+  }
   // ── 1.16.0: a pivot for an element's motion (its corner stays put as it turns; an element resting at an angle
   // does not move when the engine starts), an edge fade, a hover heard on the card around a picture, and the ripple ──
   {

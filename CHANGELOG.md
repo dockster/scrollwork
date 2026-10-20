@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.17.0
+
+- A scroll can play a flipbook: `"scroll": {"flipbook": true}` shows the
+  element's children one at a time across the range, picked by the scroll, a
+  product turning as the page goes by from 30 to 60 renders. `"blend"` crosses
+  each frame into the next, for a few views stacked in one place. It takes the
+  range, the ease and a pin's hold as any scroll does; under reduced motion the
+  first frame stays.
+- `hidden`: an element hidden at rest that its interactions bring in, their
+  opacity counted from nothing up rather than as a share of its own. A glow
+  that shows while a card is hovered: `{"hidden": true, "hover": {"opacity": 1,
+  "source": "parent"}}`. Before, a layer at opacity 0 stayed at 0 whatever its
+  interaction asked.
+- The core is 30.3 KB gzipped; its budget is 30.5 (was 30). Browser tests for
+  each in Chromium, WebKit and Firefox (777 checks).
+
 ## 1.16.0
 
 - `origin`: the point an element's motions turn and grow around, the centre or

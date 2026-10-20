@@ -200,6 +200,12 @@ export interface ScrollMotion {
    * on top of `from`
    */
   mask?: 'top' | 'bottom' | 'left' | 'right';
+  /**
+   * the element's children are frames, shown one at a time across the range, picked by the scroll (a product
+   * turning as the page goes by). `true` steps from frame to frame; `"blend"` crosses each into the next (a few
+   * views of an object, stacked in one place). Under reduced motion the first frame stays.
+   */
+  flipbook?: boolean | 'blend';
 }
 
 /** What a scroll motion moves in turn: a text's lines, words or letters, the element's children, or slices of a one-line text. */
@@ -393,6 +399,12 @@ export interface MotionItem {
   origin?: MotionOrigin;
   /** its edges fade out (a mask), for as long as the engine runs */
   fade?: EdgeFade;
+  /**
+   * hidden at rest: the element starts out of sight and its interactions bring it in, their opacity counted from
+   * nothing up rather than as a share of its own (a glow that shows while a card is hovered). Without
+   * interactions it stays hidden, as written.
+   */
+  hidden?: boolean;
 }
 
 /** What the engine knows about an element this frame, for a plugin. */

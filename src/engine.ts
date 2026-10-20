@@ -29,8 +29,8 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
     kids: Array<{ el: HTMLElement; rot: number; inline: string }> | null;
     /** a custom cursor: where the pointer is (tx, ty) and where the element has caught up to (x, y), in the root's px */
     cur: { x: number; y: number; tx: number; ty: number; seen: boolean; k: number; over: boolean; w: number; h: number } | null;
-    /** a flipbook loop's children with their own visibility, and which one shows */
-    flip: { kids: HTMLElement[]; had: string[]; at: number } | null;
+    /** a flipbook's children (a loop's or a scroll's) with their own visibility and opacity, and which one shows */
+    flip: { kids: HTMLElement[]; had: string[]; op: string[]; at: number } | null;
     /** split by lines: the words are regrouped when the width changes */
     lines: boolean;
     /** the pieces are a scroll's, not an appear's */
@@ -450,13 +450,14 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
         for (const k of kids) k.el.style.rotate = k.inline;
       });
     }
-    // a flipbook loop: the children, shown one at a time from the first frame on
-    if (item.loop && item.loop.flipbook > 0) {
+    // a flipbook, a loop's or a scroll's: the children, shown one at a time from the first frame on
+    if ((item.loop && item.loop.flipbook > 0) || (item.scroll && item.scroll.flipbook)) {
       const kids = Array.from(el.children).filter((c): c is HTMLElement => c instanceof win.HTMLElement);
       const had = kids.map((k) => k.style.visibility);
+      const op = kids.map((k) => k.style.opacity);
       kids.forEach((k) => written.add(k));
-      entry.flip = { kids, had, at: -1 };
-      restores.push(() => kids.forEach((k, i) => (k.style.visibility = had[i])));
+      entry.flip = { kids, had, op, at: -1 };
+      restores.push(() => kids.forEach((k, i) => { k.style.visibility = had[i]; k.style.opacity = op[i]; }));
     }
     // a loop's fade: the parent (the box that clips the marquee) fades at both
     // ends of the axis the loop moves along; its own mask comes back on stop
@@ -1125,6 +1126,30 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
    * A footer or the last card of a page sits in the bottom 15% of the screen
    * at most; without this it waited, hidden, for a scroll that could not come.
    */
+  /**
+   * A scroll flipbook at progress k: the frame k falls in shows; blended, the next one fades in over it as k moves
+   * across the gap between them (the next is later in the page, so it is drawn on top when the frames are stacked)
+   */
+  const showFrames = (fb: NonNullable<Entry['flip']>, k: number, blend: boolean) => {
+    const n = fb.kids.length;
+    if (!n) return;
+    if (!blend) {
+      const at = Math.min(n - 1, Math.floor(k * n));
+      if (at === fb.at) return;
+      fb.at = at;
+      fb.kids.forEach((c, i) => (c.style.visibility = i === at ? fb.had[i] : 'hidden'));
+      return;
+    }
+    const pos = k * (n - 1);
+    const at = Math.min(n - 1, Math.floor(pos));
+    const f = n > 1 && at < n - 1 ? pos - at : 0;
+    fb.at = at;
+    fb.kids.forEach((c, i) => {
+      const on = i === at || (i === at + 1 && f > 0.001);
+      c.style.visibility = on ? fb.had[i] : 'hidden';
+      c.style.opacity = i === at + 1 && on ? String(Math.round(f * 1000) / 1000) : fb.op[i];
+    });
+  };
   const render = (y: number, vh: number, now: number | null, dt = 0, bottom = Infinity): boolean => {
     let moving = false;
     // pins first: everything inside or triggered by a pinned layer reads its offset
@@ -1178,6 +1203,8 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
         const k = clamp01((y - start) / Math.max(1, end - start));
         e.sig.scroll = k;
         const sEase = (sc.ease && EASES[sc.ease]) || EASES.linear;
+        // a scroll flipbook: the frame the scroll has reached
+        if (sc.flipbook && e.flip) showFrames(e.flip, sEase(k), sc.flipbook === 'blend');
         if (e.formation && e.formation.length) {
           // each child in its turn, from its own start to the end state
           const w = Math.min(1, Math.max(0.05, sc.spread ?? 0.3));
@@ -1205,6 +1232,8 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
         // and the children in their places
         for (const f of e.formation) paint(f.el, identity(), f.base);
       }
+      // under reduced motion a scroll flipbook rests on its first frame
+      if (sc && reduced && sc.flipbook && e.flip) showFrames(e.flip, 0, false);
 
       const a = it.appear;
       e.sig.appear = 1;
@@ -1274,14 +1303,25 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
         }
         if (seen) moving = true;
       }
+      // hidden at rest: out of sight until an interaction brings it in, its opacity counted from nothing up
+      let reveal = 0;
       if (now !== null) {
         for (const c of e.changes) {
           const anim = c.ix.animation;
           c.p = approach(c.p, c.to, anim.kind === 'instant' ? 0 : anim.duration, dt);
           if (c.p !== c.to) moving = true;
-          if (c.p > 0 && c.ix.action.type === 'change') own = combine(own, mix(identity(), asState(c.ix.action.state), curveOf(anim)(c.p)));
+          if (c.p > 0 && c.ix.action.type === 'change') {
+            const st = asState(c.ix.action.state);
+            const k = curveOf(anim)(c.p);
+            if (it.hidden) {
+              reveal = Math.max(reveal, st.opacity * k);
+              st.opacity = 1;
+            }
+            own = combine(own, mix(identity(), st, k));
+          }
         }
       }
+      if (it.hidden) own.opacity *= reveal;
       // the loader: holds, then leaves (fading, blurring), then is gone
       if (loader && loader.e === e && loader.phase !== 'done' && now !== null) {
         const ld = it.loader!;
