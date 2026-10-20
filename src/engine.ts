@@ -718,6 +718,10 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
   const PINNED_OWN = /^(position|top|right|bottom|left|inset|margin|pointer-events)/;
   const FLOWING = /^(block|flow-root|flex|grid|list-item|table)$/;
   const BLOCK_PARENT = /^(block|flow-root|list-item)$/;
+  /** a flex parent (an auto layout frame): the footprint takes the element's place as a flex item */
+  const FLEX_PARENT = /^(flex|inline-flex)$/;
+  const MIN_SIZE = /^min-(width|height|inline-size|block-size)$/;
+  const FLEX_ITEM = ['align-self', 'flex-grow', 'flex-shrink', 'flex-basis', 'order'] as const;
   const doc = root.ownerDocument;
   const cssOf = (n: Element) => win.getComputedStyle(n);
   const styleKey = (n: Element, own: boolean) => {
@@ -726,7 +730,9 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
     for (let i = 0; i < cs.length; i++) {
       const k = cs[i];
       if (own && PINNED_OWN.test(k)) continue;
-      out += k + ':' + cs.getPropertyValue(k) + ';';
+      // a flex item's minimum size computes to auto, a block's to 0px: the same box, out of a flex parent and in the track
+      const v = cs.getPropertyValue(k);
+      out += k + ':' + (v === 'auto' && MIN_SIZE.test(k) ? '0px' : v) + ';';
     }
     return out;
   };
@@ -764,7 +770,8 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
     const abs = cs.position === 'absolute';
     if (!abs && cs.position !== 'static' && cs.position !== 'relative') return false;
     if (!FLOWING.test(cs.display) || cs.float !== 'none') return false;
-    if (!abs && !BLOCK_PARENT.test(cssOf(el.parentElement).display)) return false;
+    const pd = cssOf(el.parentElement).display;
+    if (!abs && !BLOCK_PARENT.test(pd) && !FLEX_PARENT.test(pd)) return false;
     // a frame, a video or a sound would reload or stop when moved into the track
     if (el.querySelector('iframe, video, audio, object, embed')) return false;
     // the comparison reads every computed style inside: kept to what a pinned block usually holds
@@ -783,6 +790,17 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
       if (scrolls(p)) return false;
     }
     return true;
+  };
+  /**
+   * An element's size to the fraction of a pixel (offsetHeight rounds: a 630.5px block's footprint of 631 moved what
+   * follows by half a pixel, and the pin fell back to the transform). Measured as laid out, so a transform on it is
+   * left out: the rounded size then.
+   */
+  const exact = (el: HTMLElement, side: 'height' | 'width') => {
+    const cs = cssOf(el);
+    const plain = cs.transform === 'none' && (cs.scale || 'none') === 'none' && (cs.rotate || 'none') === 'none' && (cs.translate || 'none') === 'none';
+    const r = el.getBoundingClientRect();
+    return plain ? r[side] : side === 'height' ? el.offsetHeight : el.offsetWidth;
   };
   const putBack = (el: HTMLElement, saved: StickyPin['saved']) => {
     for (const [k, v, pr] of saved) {
@@ -806,8 +824,10 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
       const fs = p.foot.style;
       fs.marginTop = mt;
       fs.marginBottom = mb;
-      fs.height = el.offsetHeight + 'px';
-      ts.height = el.offsetHeight + hold + 'px';
+      // a flex item held at its own width keeps it (the footprint holds no content to size it)
+      if (fs.width) fs.width = exact(el, 'width') + 'px';
+      fs.height = exact(el, 'height') + 'px';
+      ts.height = exact(el, 'height') + hold + 'px';
       return;
     }
     // positioned: laid out by its own rules again, against its containing block, which the track fills for a moment
@@ -891,9 +911,11 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
       fs.clear = cs.clear;
       fs.marginTop = cs.marginTop;
       fs.marginBottom = cs.marginBottom;
-      fs.height = el.offsetHeight + 'px';
+      fs.height = exact(el, 'height') + 'px';
+      // in an auto layout frame the footprint is the flex item: it stretches, grows and shrinks as the element did
+      if (FLEX_PARENT.test(cssOf(parent).display)) for (const k of FLEX_ITEM) fs.setProperty(k, cs.getPropertyValue(k));
       ts.left = ts.right = ts.top = '0px';
-      ts.height = el.offsetHeight + e.item.pin!.distance + 'px';
+      ts.height = exact(el, 'height') + e.item.pin!.distance + 'px';
       parent.insertBefore(foot, el);
       foot.appendChild(track);
     }
@@ -908,6 +930,8 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
     }
     es.pointerEvents = pointer;
     const p: StickyPin = { e, track, foot, saved, attr };
+    // a flex item not stretched across (centred, at one side) has no content in its footprint to size it: given its width
+    if (foot && FLEX_PARENT.test(cssOf(parent).display) && look(el, parent, foot) !== before) foot.style.width = exact(el, 'width') + 'px';
     // at rest, in the track, it must look exactly as it did
     if (look(el, parent, foot || track) !== before) {
       unstick(p);
@@ -933,6 +957,12 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
     if (!pinned) {
       pinned = true;
       for (const e of entries) {
+        // a pin the page already holds with position: sticky, in a track of its own (a framework's page draws one): the
+        // browser holds it, and it is measured from its track's top as one this placed
+        if (e.item.pin && cssOf(e.el).position === 'sticky') {
+          stuck.add(e.el);
+          continue;
+        }
         if (!canStick(e)) continue;
         const p = stick(e);
         if (p) stickies.set(e, p);

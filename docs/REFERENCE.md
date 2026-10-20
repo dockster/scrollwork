@@ -104,6 +104,14 @@ Holds the element in place while the page scrolls.
 | `distance` | `600` | px of scrolling |
 | `top` | `0` | px from the top of the view |
 
+With `data-scrollwork-sticky` (or `sticky: true`) the browser holds the pin with
+`position: sticky`, in a track Scrollwork adds, where the page looks exactly the
+same that way: in a block or a flex container (1.18.1), not inside a box that
+scrolls or another pin, and not when it holds a video or a frame (moving it
+would restart them). A pin already `position: sticky` by the page's own CSS, in a
+positioned parent as tall as it and its hold, is left to the browser (1.18.1).
+Every other pin is moved by script.
+
 ## loader
 
 The element covers the page as it opens, plays the appears inside it, holds,

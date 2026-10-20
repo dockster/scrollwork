@@ -90,10 +90,24 @@ const FLOW = `
   <section style="padding:20px"><p style="margin:30px 0">before</p>
   <div class="hero" style="height:150px;margin:40px 0;background:#00f" ${PIN(600, 80)}>Hero</div>
   <p class="after" style="margin:25px 0">after</p><div style="height:3000px"></div></section>`;
+// in auto layout, as uxdeck exports it: a column whose padding holds the room for the hold, the screen stretched across
+// it (Cairn's held screens, 1.18.1: they fell to the transform and shook through a fling on Android)
+const AUTO_LAYOUT = `
+  <style>.room{position:relative;box-sizing:border-box;display:flex;flex-direction:column;align-items:flex-start;gap:0;padding:0 0 700px 0}
+  .stage{position:relative;box-sizing:border-box;overflow:clip;align-self:stretch;width:auto;height:300px;flex-shrink:0;background:#111;color:#fff}</style>
+  <div style="height:900px">above</div><section class="room"><section class="stage" ${PIN(700, 0)}>Held <b>inside</b></section></section><div style="height:2000px">below</div>`;
+// a fixed-width layer centred in a column, and one grown along a row
+const AUTO_CENTRED = `
+  <style>.col{display:flex;flex-direction:column;align-items:center;gap:24px;padding:0 0 600px}
+  .fixed{width:320px;height:120px;flex-shrink:0;background:#0a0}.mate{width:200px;height:40px;background:#ccc}</style>
+  <div style="height:900px">above</div><div class="col"><div class="mate">a</div><div class="fixed" ${PIN(600, 40)}>Centred</div><div class="mate">b</div></div><div style="height:2000px"></div>`;
+const AUTO_ROW = `
+  <style>.row{display:flex;flex-direction:row;align-items:flex-start;gap:16px;height:1400px}
+  .grow{flex-grow:1;height:150px;background:#06c}.side{width:180px;height:150px;background:#ccc}</style>
+  <div style="height:900px">above</div><div class="row"><div class="side">side</div><div class="grow" ${PIN(500, 30)}>Grown</div></div><div style="height:2000px"></div>`;
 // and the ones it must leave to the transform, each still held
 const FALLBACKS = {
   'a style that depends on the parent': `<style>.wrap > .pinme{color:rgb(200,0,0)}</style><div class="wrap" style="height:3000px;padding-top:900px"><div class="pinme" style="height:100px;background:#fc0" ${PIN(500, 60)}>x</div></div>`,
-  'a flex item': `<div style="display:flex;flex-direction:column;height:3000px;padding-top:900px"><div class="pinme" style="height:100px;background:#fc0" ${PIN(500, 60)}>x</div></div>`,
   'inside a box that hides its overflow': `<div style="overflow:hidden;height:3000px;padding-top:900px"><div class="pinme" style="height:100px;background:#fc0" ${PIN(500, 60)}>x</div></div>`,
   'holding a video': `<div style="height:3000px;padding-top:900px"><div class="pinme" style="height:100px;background:#fc0" ${PIN(500, 60)}><video></video></div></div>`,
   'a width in percent': `<div style="position:relative;height:3000px"><div class="pinme" style="position:absolute;top:900px;left:0;width:30%;height:100px;background:#fc0" ${PIN(500, 60)}>x</div></div>`,
@@ -108,6 +122,9 @@ for (const name of BROWSERS) {
     ['positioned in a frame', ABSOLUTE, '.card', 1200, 100, 800],
     ['a layer in a uxdeck screen (a frame that clips)', EXPORTED, '.pinned', 1400, 100, 400],
     ['in the flow', FLOW, '.hero', 20 + 30 + 18 + 40 + 0, 80, 600],
+    ['in the flow of auto layout, stretched across', AUTO_LAYOUT, '.stage', 0, 0, 700],
+    ['in the flow of auto layout, centred at its own width', AUTO_CENTRED, '.fixed', 0, 40, 600],
+    ['in the flow of auto layout, grown along a row', AUTO_ROW, '.grow', 0, 30, 500],
   ]) {
     const plain = await page(browser, body, { engine: false });
     const bare = await layout(plain.p);
@@ -120,7 +137,7 @@ for (const name of BROWSERS) {
     const withPin = await layout(p);
     check(tag(`${label}: the page lays out exactly as without Scrollwork`), sameLayout(bare, withPin), sameLayout(bare, withPin) ? '' : diff(bare, withPin));
     // the flow case's top is measured, not written out
-    const T0 = label === 'in the flow' ? await p.evaluate((sel) => Math.round(document.querySelector(sel).getBoundingClientRect().top + scrollY), sel) : T;
+    const T0 = label.startsWith('in the flow') ? await p.evaluate((sel) => Math.round(document.querySelector(sel).getBoundingClientRect().top + scrollY), sel) : T;
     const h = await holds(p, sel, T0, top, distance);
     check(tag(`${label}: held where the transform held it, before, during and after`), h.ok, h.detail);
     await p.evaluate(() => window.sw.stop());

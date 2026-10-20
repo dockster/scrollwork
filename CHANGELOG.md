@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.18.1
+
+- Pins inside a flex container (an auto layout frame, as uxdeck exports it)
+  are held with `position: sticky` too: they were moved by script, a frame
+  behind the scroll, and shook through a fling on Android and iOS. Measured on
+  a phone-sized fling: up to 49 px off its place before, 0 after.
+- Blocks a few half pixels tall no longer fall back to the script: the track
+  takes the element's exact height.
+- A pin the page already holds with `position: sticky`, in a positioned parent
+  as tall as its hold, is left to the browser and measured from that parent. A
+  framework's page (React, Vue), or a pin holding a video, can hold itself
+  this way while Scrollwork plays everything inside it.
+
 ## 1.18.0
 
 - A state can turn the colours round the colour wheel, `hue` in degrees: a

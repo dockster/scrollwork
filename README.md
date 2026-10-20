@@ -60,7 +60,9 @@ wheel scrolling smooth, and `data-scrollwork-sticky` to pin with
 momentum scrolling. Sticky moves each pinned element into a track of its own
 while it plays, so leave it off on pages a framework such as React or Vue
 renders; there, pins move by script as before (`sticky: true` is the same
-choice from code).
+choice from code), unless the page makes the pin sticky itself: give it
+`position: sticky` and `top`, inside a positioned parent as tall as the pin and
+its hold, and Scrollwork leaves it to the browser.
 
 ### Avoid a flash
 
