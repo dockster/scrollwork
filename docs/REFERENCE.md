@@ -21,6 +21,9 @@ carry `scaleX`, `scaleY`, `fill`, `ink` and `image`:
 | `blur` | px | `0` |
 | `fill`, `ink` | a CSS colour the background (or the text, the words inside the element included) moves to | the element's own |
 | `image` | a picture's URL, shown in place of the element's own from halfway through | the element's own |
+| `hue` | (1.18) degrees the colours turn round the colour wheel; 360 is a full turn back to them | `0` |
+| `glow`, `glowColor` | (1.18) px of soft light round the element and its words, in a CSS colour (the element's own text colour when unset) | none |
+| `draw` | (1.18) 0 to 1: how much of an SVG line is drawn from its start, the element's own path or the paths and shapes inside it | drawn |
 
 A state is relative to the element as the page draws it. `y: 40` is 40px below
 where its CSS puts it, and `scale: 1.1` is 10% larger than its own scale.
@@ -69,6 +72,7 @@ Follows the scroll position.
 | `whole` | `false` | slices: the slices move whole, as strips; otherwise the words move inside slices that stay in place |
 | `order`, `outward`, `vary`, `origin` | `start`, off, `0`, `center` | children, slices, and (1.15) a text's `words` or `chars`: which piece goes first (`start`, `end`, `center`, `edges`, `random`); each starting away from the centre on its side (a text's pieces on one axis as far as each is from the centre); how much each start differs (a text's pieces may also move the other way, scattering); the point each turns about (`top`, `bottom`, `left`, `right`, or `behind`, 1em behind it in depth) |
 | `mask` | none | (1.15) a text's lines, words or letters: each starts out of its own box on this side (`top`, `bottom`, `left`, `right`), hidden by it, and slides into view; letters each get a box of their own. On top of `from` |
+| `axis` | `"y"` | (1.18) `"x"`: the range follows the element across what it is seen through (the nearest box that clips it sideways, such as a row's window, or the screen), its centre from the right edge to the left one, instead of the page's scroll down. For pictures in a row the page moves sideways (a track on a pin): give them a step at 50% and each grows as it passes the middle. `in` is until its centre reaches that box's, `out` from there on |
 | `flipbook` | off | (1.17) the element's children are frames shown one at a time across the range, picked by the scroll: a product turning as the page goes by. `true` steps from frame to frame (30 to 60 renders); `"blend"` crosses each into the next (a few views, stacked in one place: the later one is drawn over the earlier). The range and `ease` work as for any scroll; on a pin, `range: "hold"`. Under reduced motion the first frame stays |
 
 ## loop
@@ -460,6 +464,27 @@ words take no pointer events of their own.
 | `shade` | `0.5` | how much its slopes are lit and shaded, 0 to 1 |
 | `trail` | `0.5` | seconds the dome takes to catch up with the pointer, 0 to 5 |
 | `in`, `out` | `0.3`, `0.6` | seconds for the hover to come in and go out |
+
+### colormap
+
+A colour map (1.18): the picture's light read through a ramp of five colours,
+dark to light, a heat camera's view of a room. It comes in as far as its drive:
+by default `on: "progress"`, the element's own scroll motion's progress, so a
+held screen turns to heat as the page goes by.
+
+```html
+<img src="room.jpg" data-scrollwork='{"scroll": {"range": "hold"}, "fx": [{"type": "colormap"}]}'>
+```
+
+| Field | Default | |
+|---|---|---|
+| `color` … `color5` | `#0E0834`, `#40128C`, `#B41C80`, `#F56028`, `#FFF2C8` | the ramp, darkest to lightest |
+| `reveal` | `"fade"` | `fade`: the whole picture at once; `sweep`: from the left edge across |
+| `curve` | `1.4` | how the light is read before the ramp, 0.2 to 4: above 1 keeps more of it dark |
+
+`on` can also be any effect's drive (`hover`, `appear`, `always`, `scroll`).
+`progress` (1.18) is new for every effect: how far through its scroll range
+the element is.
 
 ### Playing an effect on demand
 

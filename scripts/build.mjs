@@ -74,8 +74,9 @@ execFileSync('npx', ['tsc', '-p', 'tsconfig.json'], { stdio: 'inherit' });
 // slices (a one-line text cut into slices that come together as the page scrolls; Codrops' Sliced Text Effect): 28.6, so 29; a text's pieces as a formation and masks from a side (Codrops' On-Scroll Typography Animations) take it to 29.0
 // a pivot for a whole element's motion, an edge fade, an interaction heard on another element (a card hovered moves its picture), and the ripple wipe (from the pointer): 29.9, so 30
 // a flipbook picked by the scroll (stepped or blended: a product turning as the page goes by) and a layer hidden until its interactions bring it in: 30.3, so 30.5
+// 1.18: colours turned round the wheel, a glow, an SVG line drawn as a state, and a scroll that follows an element across the screen (axis x): 31.0, so 31.5; the effects add-on's colour map (a heat camera's ramp, by scroll progress): 10.2, so 10.5
 // the bulge (Codrops' 3D Bulge Text Effect: a lit lens around the pointer, and a text host's words drawn into its picture): 9.8, so 10
-const BUDGET = { 'scrollwork.min.js': 30.5, 'scrollwork-fx.min.js': 10, 'scrollwork-extras.min.js': 5 };
+const BUDGET = { 'scrollwork.min.js': 31.5, 'scrollwork-fx.min.js': 10.5, 'scrollwork-extras.min.js': 5 };
 let over = '';
 for (const f of ['scrollwork.mjs', 'scrollwork.js', 'scrollwork.min.js', 'fx.mjs', 'scrollwork-fx.js', 'scrollwork-fx.min.js', 'extras.mjs', 'scrollwork-extras.js', 'scrollwork-extras.min.js']) {
   const b = readFileSync(`dist/${f}`);

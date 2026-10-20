@@ -5,7 +5,7 @@
 import type { Fx, FxBase, FxOn, FxType } from './types.js';
 import type { FxSpec } from '../types.js';
 
-const ONS: readonly FxOn[] = ['hover', 'appear', 'always', 'scroll'];
+const ONS: readonly FxOn[] = ['hover', 'appear', 'always', 'scroll', 'progress'];
 
 /** What each effect is when nothing but its type is written. */
 export const FX_DEFAULTS: { [T in FxType]: Omit<Extract<Fx, { type: T }>, 'type'> } = {
@@ -15,12 +15,14 @@ export const FX_DEFAULTS: { [T in FxType]: Omit<Extract<Fx, { type: T }>, 'type'
   distort: { on: 'hover', intensity: 1, speed: 1, seed: 0, in: 0.2, out: 0.6, grid: 50, mouse: 0.25, strength: 0.11, relaxation: 0.9 },
   // Codrops' bulge: a dome a fifth of the width across, eased towards the pointer (its lerp of 0.1 a frame)
   bulge: { on: 'hover', intensity: 1, speed: 1, seed: 0, in: 0.3, out: 0.6, reach: 0.2, strength: 0.6, shade: 0.5, trail: 0.5 },
+  // a heat camera's ramp
+  colormap: { on: 'progress', intensity: 1, speed: 1, seed: 0, in: 0.3, out: 0.5, color: '#0E0834', color2: '#40128C', color3: '#B41C80', color4: '#F56028', color5: '#FFF2C8', reveal: 'fade', curve: 1.4 },
 };
 
 /** fields that name one of a few choices */
-const CHOICES: Record<string, readonly string[]> = { mode: ['bayer', 'halftone'] };
+const CHOICES: Record<string, readonly string[]> = { mode: ['bayer', 'halftone'], reveal: ['fade', 'sweep'] };
 /** fields that hold a colour */
-const COLOURS = new Set(['color', 'color2', 'accent']);
+const COLOURS = new Set(['color', 'color2', 'color3', 'color4', 'color5', 'accent']);
 
 /** A colour as red, green, blue, alpha 0 to 1: #rgb, #rgba, #rrggbb, #rrggbbaa, rgb() and rgba(), or transparent; null for anything else. */
 export function rgbaOf(v: string): [number, number, number, number] | null {
@@ -78,6 +80,7 @@ const RANGES: Record<string, [number, number]> = {
   relaxation: [0, 0.999],
   reach: [0.02, 1],
   shade: [0, 1],
+  curve: [0.2, 4],
 };
 /** numeric fields that are whole numbers */
 const WHOLE = new Set(['grid']);

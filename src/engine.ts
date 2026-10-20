@@ -92,6 +92,11 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
       s.clip = m.clip.bottom || 0;
       s.cl = m.clip.left || 0;
     }
+    // (1.18) the colours turned round the wheel, a glow, an SVG line drawn
+    if (m.hue) s.hue = m.hue;
+    if (m.glow) s.glow = m.glow;
+    if (m.glowColor) s.glowC = colourOf(m.glowColor);
+    if (m.draw !== undefined) s.draw = m.draw;
     return s;
   };
   /** a timeline of stops at 0-100%: the state `k` (0-1) of the way along, each step eased on its own */
@@ -1200,7 +1205,20 @@ export function startEngine(spec: MotionSpec, opts: MotionOptions): MotionContro
           start = sc.range === 'out' ? T + H / 2 - vh / 2 : T - vh;
           end = sc.range === 'in' ? T + H / 2 - vh / 2 : T + H;
         }
-        const k = clamp01((y - start) / Math.max(1, end - start));
+        let k = clamp01((y - start) / Math.max(1, end - start));
+        if (sc.axis === 'x') {
+          // across the screen: its centre from the right edge to the left one (a scale about the centre leaves it
+          // where it is, so the motion does not move its own measure)
+          // across what it is seen through: the nearest box that clips it sideways (a row's window), or the screen
+          let clipBox: HTMLElement | null = e.el.parentElement;
+          while (clipBox && clipBox !== root.ownerDocument.body && !/(hidden|clip|auto|scroll)/.test(cssOf(clipBox).overflowX)) clipBox = clipBox.parentElement;
+          const view = clipBox && clipBox !== root.ownerDocument.body ? clipBox.getBoundingClientRect() : { left: 0, width: win.innerWidth || 1 };
+          const vw = view.width || 1;
+          const r = e.el.getBoundingClientRect();
+          const w = e.el.offsetWidth || r.width;
+          const cx = r.left + r.width / 2 - view.left;
+          k = sc.range === 'in' ? clamp01((vw + w / 2 - cx) / (vw / 2 + w / 2)) : sc.range === 'out' ? clamp01((vw / 2 - cx) / (vw / 2 + w / 2)) : clamp01((vw + w / 2 - cx) / (vw + w));
+        }
         e.sig.scroll = k;
         const sEase = (sc.ease && EASES[sc.ease]) || EASES.linear;
         // a scroll flipbook: the frame the scroll has reached

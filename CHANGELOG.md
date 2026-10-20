@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.18.0
+
+- A state can turn the colours round the colour wheel, `hue` in degrees: a
+  loop to 360 cycles them for good, a scroll shifts them as the page goes by.
+- A `glow`: px of soft light round the element and its words, in a
+  `glowColor` (its own text colour when unset), eased like any state. A
+  headline that lights up on hover or as it scrolls in.
+- `draw`, 0 to 1: how much of an SVG line is drawn from its start, the
+  element's own path or the paths and shapes inside it. `{"appear": {"from":
+  {"draw": 0}}}` draws a drawing in; on a scroll it draws with the page. Given
+  back on stop.
+- A scroll can follow an element across what it is seen through (the box
+  that clips it sideways, or the screen), `"axis": "x"`: for pictures in a
+  sideways row, each growing as it passes the middle.
+- The effects add-on draws a colour map, `colormap`: the picture's light read
+  through five colours (a heat camera's ramp by default), fading in or sweeping
+  across from the left. Every effect can now be driven by `progress`, how far
+  through its scroll range the element is.
+- The core is 31.0 KB gzipped (budget 31.5, was 30.5); the effects add-on 10.2
+  (budget 10.5, was 10). Browser tests for each in Chromium, WebKit and Firefox
+  (801 checks).
+
 ## 1.17.0
 
 - A scroll can play a flipbook: `"scroll": {"flipbook": true}` shows the

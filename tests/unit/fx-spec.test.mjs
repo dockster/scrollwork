@@ -40,7 +40,7 @@ test('an effect this build does not play is left out and named, the rest stay in
   assert.equal(list.length, 2);
   assert.equal(list[0].on, 'always');
   assert.equal(list[1].on, 'hover');
-  assert.match(out[0], /items\[3\]\.fx\[1\]: "sparkle" is not an effect this build of scrollwork\/fx plays \(glitch, dither, distort, bulge\)/);
+  assert.match(out[0], /items\[3\]\.fx\[1\]: "sparkle" is not an effect this build of scrollwork\/fx plays \(glitch, dither, distort, bulge, colormap\)/);
 });
 
 test('something that is not an effect at all is said', () => {

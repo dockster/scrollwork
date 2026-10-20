@@ -11,6 +11,7 @@
 
 import { program, setUniforms, texture, triangle, type Program } from './gl.js';
 import { GLITCH } from './shaders/glitch.js';
+import { COLORMAP } from './shaders/colormap.js';
 import { DITHER } from './shaders/dither.js';
 import { DISTORT } from './shaders/distort.js';
 import { BULGE } from './shaders/bulge.js';
@@ -217,9 +218,9 @@ export interface Surface {
   readonly hosts: ReadonlyMap<HTMLElement, Host>;
 }
 
-const SHADERS: Record<FxType, string> = { glitch: GLITCH, dither: DITHER, distort: DISTORT, bulge: BULGE };
+const SHADERS: Record<FxType, string> = { glitch: GLITCH, dither: DITHER, distort: DISTORT, bulge: BULGE, colormap: COLORMAP };
 /** effects that leave the picture as it is at k 0: at rest the host's own picture shows and nothing draws */
-const IDLE_IDENTITY: Record<FxType, boolean> = { glitch: true, dither: false, distort: true, bulge: true };
+const IDLE_IDENTITY: Record<FxType, boolean> = { glitch: true, dither: false, distort: true, bulge: true, colormap: true };
 const STYLE = '.ux-motion-fx{position:absolute;inset:0;width:100%;height:100%;border-radius:inherit;pointer-events:none;display:block}.ux-motion-fx.is-crisp{image-rendering:pixelated}.ux-motion-fx.is-field{z-index:-1}.ux-motion-fx-text,.ux-motion-fx-text *{-webkit-text-fill-color:transparent!important;text-shadow:none!important}';
 /** hosts that cannot hold a child canvas */
 const NO_CHILD = /^(IMG|VIDEO|CANVAS|INPUT|TEXTAREA|SELECT|svg|IFRAME|BR|HR)$/;
@@ -581,6 +582,8 @@ export function createSurface(o: SurfaceOptions): Surface | null {
         return 1 - s.appear;
       case 'scroll':
         return Math.min(1, Math.abs(s.velocity) / 1200);
+      case 'progress':
+        return s.scroll;
       default:
         return 1;
     }
@@ -675,7 +678,7 @@ export function createSurface(o: SurfaceOptions): Surface | null {
         else if (typeof v === 'string' && key !== 'type' && key !== 'on') {
           // a colour as four numbers; a choice as its place in the list (mode: bayer 0, halftone 1)
           const c = rgbaOf(v);
-          values['u_' + key] = c || (v === 'halftone' ? 1 : 0);
+          values['u_' + key] = c || (v === 'halftone' || v === 'sweep' ? 1 : 0);
         }
       }
       setUniforms(gl, p, values);

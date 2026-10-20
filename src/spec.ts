@@ -94,6 +94,12 @@ export const state = (v: unknown, notes: Notes, what: string, base: Partial<Moti
     }
     if (Object.keys(clip).length) out.clip = clip;
   } else if (s.clip !== undefined) notes.add(`${what}.clip: expected an object like {"top": 100, "right": 100}`);
+  // (1.18) colours turned round the wheel, a glow, an SVG line drawn
+  if (s.hue !== undefined || b.hue !== undefined) out.hue = num(s.hue, b.hue ?? 0, notes, what + '.hue');
+  if (s.glow !== undefined || b.glow !== undefined) out.glow = num(s.glow, b.glow ?? 0, notes, what + '.glow', 0, 400);
+  const glowColor = colour(s.glowColor ?? b.glowColor, notes, what + '.glowColor');
+  if (glowColor) out.glowColor = glowColor;
+  if (s.draw !== undefined || b.draw !== undefined) out.draw = num(s.draw, b.draw ?? 1, notes, what + '.draw', 0, 1);
   return out;
 };
 /** a CSS colour as written (a name, hex, rgb(), oklch()…): letters, digits, # ( ) , . % and spaces, nothing that could end a declaration */
@@ -193,6 +199,7 @@ export function readScroll(v: unknown, notes: Notes, what: string): ScrollMotion
     ...(s.slices !== undefined ? { slices: Math.round(num(s.slices, 4, notes, what + '.slices', 2, 12)) } : {}),
     ...(s.whole === true ? { whole: true } : {}),
     ...(s.mask !== undefined ? { mask: oneOf(s.mask, MASKS, 'bottom', notes, what + '.mask') } : {}),
+    ...(s.axis === 'x' ? { axis: 'x' as const } : s.axis !== undefined && s.axis !== 'y' ? (notes.add(`${what}.axis: expected "y" or "x"`), {}) : {}),
     ...(s.flipbook === true || s.flipbook === 'blend' ? { flipbook: s.flipbook } : s.flipbook !== undefined && s.flipbook !== false ? (notes.add(`${what}.flipbook: expected true or "blend"`), {}) : {}),
   };
 }

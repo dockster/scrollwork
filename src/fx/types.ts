@@ -1,8 +1,8 @@
 // The effects scrollwork/fx plays, as read from an item's `fx` list. Every
 // field has a default (spec.ts); a page writes only what it means.
 
-/** What drives an effect: hovering (and keyboard focus), its appear, every frame, or the scroll speed */
-export type FxOn = 'hover' | 'appear' | 'always' | 'scroll';
+/** What drives an effect: hovering (and keyboard focus), its appear, every frame, the scroll speed, or (1.18) how far through its scroll range the element is */
+export type FxOn = 'hover' | 'appear' | 'always' | 'scroll' | 'progress';
 
 export interface FxBase {
   on: FxOn;
@@ -87,7 +87,26 @@ export interface BulgeFx extends FxBase {
   trail: number;
 }
 
-export type Fx = GlitchFx | DitherFx | DistortFx | BulgeFx;
+/**
+ * (1.18) A colour map: the picture's light read through five colours, dark to light (a heat camera's view: deep
+ * violet, magenta, orange, a near white). It fades in over the picture or sweeps across it from the left, as far
+ * as its drive: on `progress`, with the element's scroll.
+ */
+export interface ColormapFx extends FxBase {
+  type: 'colormap';
+  /** the ramp, darkest to lightest, any CSS hex or rgb() colour */
+  color: string;
+  color2: string;
+  color3: string;
+  color4: string;
+  color5: string;
+  /** fade: the whole picture at once; sweep: from the left edge across */
+  reveal: 'fade' | 'sweep';
+  /** how the light is read before the ramp: above 1 keeps more of it dark, below 1 lifts it */
+  curve: number;
+}
+
+export type Fx = GlitchFx | DitherFx | DistortFx | BulgeFx | ColormapFx;
 export type FxType = Fx['type'];
 
 /** The picture an effect reads: the host's own, found at mount */

@@ -4,7 +4,7 @@ Scroll, appear, pin and interaction motion for the web. Describe it in HTML
 with a `data-scrollwork` attribute, or in code with `animate()`, `timeline()`,
 `inView()` and `scroll()`.
 
-- **About 30 KB gzipped, no dependencies.** One file for a `<script>` tag, or
+- **About 31 KB gzipped, no dependencies.** One file for a `<script>` tag, or
   an ES module for your bundler, with TypeScript types. WebGL effects are a
   separate, optional file (`scrollwork/fx`, about 10 KB), and so are flip,
   morph, motion paths, dragging and sideways sections (`scrollwork/extras`,
@@ -130,6 +130,7 @@ defaults, is in [docs/REFERENCE.md](docs/REFERENCE.md).
 | `rollover` | A button's hover effect: `roll` sends the label's letters out one after another as a copy rolls in (`direction` up or down, `stagger`), `wipe` sweeps a `color` across it from a side or the centre while its words take an `ink`, or with `direction: "pointer"` ripples it: a circle of the colour grows from where the pointer comes in and goes back toward where it leaves. `scramble` flickers each letter through random characters (`turns`, `glyphs`) before it lands on its own, with a `cursor` block and random `colors` if asked, and plays on hover, as the text comes into view, or both (`on`). Played by the nearest link or button around it, or by keyboard focus; one of each, as a list, on the same element. |
 | `interactions` | The full list: click, key, delay, a video ending and more, changing state, scrolling to an element, or calling your own `custom` action. Each can be heard on another element (`source`). |
 | `origin` | The point its motions turn and grow around: `center` (the default), `top`, `bottom`, `left`, `right` or a corner (`top-left`, …). A card that tips from its top edge. Its own resting rotation stays as it is. |
+| States (1.18) | A state can also turn the colours round the wheel (`hue`), light the element in a `glow` of a `glowColor`, and `draw` an SVG line from its start; a loop on `hue` cycles the colours. A scroll can follow an element across its row's window or the screen (`"axis": "x"`) for pictures in a sideways row. |
 | `hidden` | Hidden at rest, brought in by its interactions: a glow that shows while the card around it is hovered (`"hover": {"opacity": 1, "source": "parent"}`). |
 | `fade` | Its edges fade to nothing, in px from each: `{ "top": 60, "bottom": 60 }` for a window that words scroll through. |
 

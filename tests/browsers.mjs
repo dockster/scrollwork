@@ -306,6 +306,68 @@ for (const name of BROWSERS) {
   }
 
 
+  // ── 1.18.0: hue turned on a loop, a glow on hover, an SVG line drawn, a scroll across the screen, and a colour map ──
+  {
+    const body = `<div id="hu" style="width:120px;height:60px;background:#e33" data-scrollwork='{"loop":{"to":{"hue":360},"duration":2,"ease":"linear"}}'></div>
+      <p id="gl" style="font-size:40px;margin:20px" data-scrollwork='{"hover":{"glow":20,"glowColor":"#ffcc00"}}'>Glow</p>
+      <div id="dr" data-scrollwork='{"appear":{"effect":"custom","from":{"draw":0},"duration":0.4,"ease":"linear"}}'><svg width="300" height="20"><path id="ln" d="M0 10 L300 10" stroke="#000" stroke-width="4" fill="none"/></svg></div>
+      <div style="width:1000px;height:120px;overflow:hidden;position:relative"><div id="trk" style="position:absolute;left:0;top:0;display:flex"><div id="ax" style="width:200px;height:100px;background:#39c" data-scrollwork='{"scroll":{"axis":"x","from":{"scale":0.5},"keys":[{"at":50,"state":{"scale":1.5}}],"to":{"scale":0.5}}}'></div></div></div>
+      <div style="height:2400px"></div>`;
+    const { p, ctx, errors } = await page(browser, body, { script: '<script src="/scrollwork.min.js" data-auto></script>' });
+    await sleep(500);
+    const hue = await p.evaluate(() => document.getElementById('hu').style.filter);
+    check(tag('hue: a loop turns the colours round the wheel'), /hue-rotate\(\d/.test(hue), hue);
+    const g = await p.locator('#gl').boundingBox();
+    await p.mouse.move(g.x + 10, g.y + 10);
+    await sleep(450);
+    const glow = await p.evaluate(() => document.getElementById('gl').style.filter);
+    await p.mouse.move(900, 650);
+    await sleep(450);
+    const glowOff = await p.evaluate(() => document.getElementById('gl').style.filter);
+    check(tag('glow: hovering lights the words in the glow colour, leaving takes it away'), /drop-shadow\(.*20px.*255, 204, 0/.test(glow) && !/drop-shadow/.test(glowOff), `${glow} | ${glowOff || '(none)'}`);
+    const drawn = await p.evaluate(() => { const l = document.getElementById('ln'); return [l.style.strokeDasharray, parseFloat(l.style.strokeDashoffset)]; });
+    check(tag('draw: the line is drawn from its start to its end'), /300/.test(drawn[0]) && drawn[1] < 1, JSON.stringify(drawn));
+    const scaleAt = async (left) => { await p.evaluate((x) => { document.getElementById('trk').style.left = x + 'px'; window.scrollBy(0, 1); }, left); await sleep(200); await p.evaluate(() => window.scrollBy(0, -1)); await sleep(200); return p.evaluate(() => parseFloat(getComputedStyle(document.getElementById('ax')).scale) || 1); };
+    const mid = await scaleAt(400);
+    const edge = await scaleAt(880);
+    check(tag('axis x: an element grows as it passes the middle of the screen, sideways'), mid > 1.4 && edge < 1.0, `${mid} at the middle, ${edge} near the right`);
+    await p.evaluate(() => window.scrollwork && window.scrollwork.stop && window.scrollwork.stop());
+    const back = await p.evaluate(() => [document.getElementById('hu').style.filter, document.getElementById('ln').style.strokeDasharray]);
+    check(tag('stop: the filter and the line are given back'), back[0] === '' && back[1] === '', JSON.stringify(back));
+    check(tag('1.18 page: no errors'), errors.length === 0, errors.join(' | '));
+    await ctx.close();
+  }
+  {
+    const fxScript = '<script src="/scrollwork.min.js"></script><script src="/scrollwork-fx.min.js"></script>';
+    const picture = `<script>(() => { const c = document.createElement('canvas'); c.width = 60; c.height = 40; const x = c.getContext('2d'); const gr = x.createLinearGradient(0, 0, 60, 0); gr.addColorStop(0, '#111111'); gr.addColorStop(1, '#eeeeee'); x.fillStyle = gr; x.fillRect(0, 0, 60, 40); window.__pic = c.toDataURL(); })();</script>`;
+    const body = `<div style="height:900px"></div><div id="cm" style="width:300px;height:200px;background-size:cover" data-scrollwork='{"scroll":{"range":"through"},"fx":[{"type":"colormap"}]}'></div><div style="height:1600px"></div>`;
+    const { p, ctx, errors } = await page(browser, picture + body, { script: fxScript });
+    const able = await p.evaluate(() => {
+      document.getElementById('cm').style.backgroundImage = `url(${window.__pic})`;
+      const can = typeof OffscreenCanvas !== 'undefined' && !!new OffscreenCanvas(1, 1).getContext('webgl2') && !!document.createElement('canvas').getContext('bitmaprenderer');
+      window.sw = window.Scrollwork.auto(document.body, { plugins: [window.ScrollworkFx.fx] });
+      return can;
+    });
+    if (!able) check(tag('colour map: no WebGL2 here, the page plays without it'), errors.length === 0, errors.join(' | '));
+    else {
+      await sleep(400);
+      const shown0 = await p.evaluate(() => getComputedStyle(document.querySelector('#cm > canvas.ux-motion-fx')).display);
+      await p.evaluate(() => window.scrollTo(0, 800));
+      await sleep(500);
+      const read = await p.evaluate(() => {
+        const v = document.querySelector('#cm > canvas.ux-motion-fx');
+        if (getComputedStyle(v).display === 'none') return { shown: 'none' };
+        const c = document.createElement('canvas'); c.width = v.width; c.height = v.height;
+        const x = c.getContext('2d'); x.drawImage(v, 0, 0);
+        const d = x.getImageData(Math.floor(c.width * 0.85), Math.floor(c.height / 2), 1, 1).data;
+        return { shown: 'block', light: [d[0], d[1], d[2]] };
+      });
+      // the light end of a grey picture, mid-way into the heat ramp: warm, more red than blue
+      check(tag('colour map: hidden before its scroll starts, then the picture read through the ramp as the page scrolls'), shown0 === 'none' && read.shown === 'block' && read.light[0] > read.light[2] + 30, JSON.stringify({ shown0, read }));
+    }
+    check(tag('colour map page: no errors'), errors.length === 0, errors.join(' | '));
+    await ctx.close();
+  }
   // ── 1.17.0: a flipbook picked by the scroll (stepped and blended), and a layer hidden until its card is hovered ──
   {
     const frames = (id, mode) => `<div id="${id}" style="position:relative;height:300px;width:300px" data-scrollwork='{"scroll":{"flipbook":${JSON.stringify(mode)},"range":"through"}}'>${[0, 1, 2, 3, 4].map((i) => `<div style="position:absolute;inset:0;background:hsl(${i * 60},70%,50%)">${i}</div>`).join('')}</div>`;

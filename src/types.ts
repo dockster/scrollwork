@@ -38,6 +38,14 @@ export interface MotionState {
    * bottom-left corner as it moves to `{}`
    */
   clip?: { top?: number; right?: number; bottom?: number; left?: number };
+  /** degrees the colours turn round the colour wheel (a hue-rotate filter): 360 is a full turn, back where they started */
+  hue?: number;
+  /** px: a soft light round the element and its text, in `glowColor` (its own text colour when unset) */
+  glow?: number;
+  /** the glow's colour, any CSS colour */
+  glowColor?: string;
+  /** 0 to 1: how much of an SVG line is drawn, from its start (the element's own paths and shapes, or those inside it) */
+  draw?: number;
 }
 
 /** The easing functions of easings.net, by family: `ease-in-sine` to `ease-in-out-bounce`. */
@@ -206,6 +214,13 @@ export interface ScrollMotion {
    * views of an object, stacked in one place). Under reduced motion the first frame stays.
    */
   flipbook?: boolean | 'blend';
+  /**
+   * (1.18) `x`: the range follows the element across what it is seen through (the nearest box that clips it sideways, or the screen) from right to left instead of the page's
+   * scroll down: for pictures in a row the page moves sideways (a track on a pin), each growing as it passes the
+   * middle. `through` is from entering on the right to leaving on the left; `in` until its centre is at the
+   * screen's; `out` from there to leaving
+   */
+  axis?: 'y' | 'x';
 }
 
 /** What a scroll motion moves in turn: a text's lines, words or letters, the element's children, or slices of a one-line text. */
@@ -372,7 +387,7 @@ export interface EdgeFade {
  */
 export interface FxSpec {
   type: string;
-  on?: 'hover' | 'appear' | 'always' | 'scroll';
+  on?: 'hover' | 'appear' | 'always' | 'scroll' | 'progress';
   [key: string]: unknown;
 }
 

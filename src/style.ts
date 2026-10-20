@@ -37,6 +37,13 @@ export interface State {
   ink: Tint | null;
   /** a picture to show instead of its own, shown from halfway (k >= 0.5) */
   image: Pic | null;
+  /** degrees round the colour wheel */
+  hue: number;
+  /** a glow: its radius in px and its colour (null: the element's own text colour) */
+  glow: number;
+  glowC: Rgba | null;
+  /** how much of an SVG line is drawn, 0 to 1; -1 when the state says nothing of it */
+  draw: number;
 }
 /** red, green, blue 0-255 and alpha 0-1 */
 export type Rgba = [number, number, number, number];
@@ -49,7 +56,7 @@ export interface Pic {
   k: number;
 }
 
-export const identity = (): State => ({ x: 0, y: 0, yp: 0, xp: 0, scale: 1, rotate: 0, rx: 0, ry: 0, pz: 0, opacity: 1, blur: 0, clip: 0, ct: 0, cr: 0, cl: 0, sx: 1, sy: 1, fill: null, ink: null, image: null });
+export const identity = (): State => ({ x: 0, y: 0, yp: 0, xp: 0, scale: 1, rotate: 0, rx: 0, ry: 0, pz: 0, opacity: 1, blur: 0, clip: 0, ct: 0, cr: 0, cl: 0, sx: 1, sy: 1, fill: null, ink: null, image: null, hue: 0, glow: 0, glowC: null, draw: -1 });
 
 const mixRgba = (a: Rgba, b: Rgba, k: number): Rgba => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k, a[3] + (b[3] - a[3]) * k];
 /** between two tints: the colour too when both have one, and how far along */
@@ -88,6 +95,11 @@ export const mix = (a: State, b: State, k: number): State => ({
   fill: mixTint(a.fill, b.fill, k),
   ink: mixTint(a.ink, b.ink, k),
   image: mixPic(a.image, b.image, k),
+  hue: a.hue + (b.hue - a.hue) * k,
+  glow: Math.max(0, a.glow + (b.glow - a.glow) * k),
+  glowC: a.glowC && b.glowC ? mixRgba(a.glowC, b.glowC, k) : b.glowC || a.glowC,
+  // a line's drawing: from the one that says, or between the two; untouched when neither does
+  draw: a.draw < 0 && b.draw < 0 ? -1 : (a.draw < 0 ? 1 : a.draw) + ((b.draw < 0 ? 1 : b.draw) - (a.draw < 0 ? 1 : a.draw)) * k,
 });
 
 /** two motions on one element at once: moves add, scales and opacities multiply; of two colours, the one further along shows */
@@ -113,6 +125,10 @@ export const combine = (a: State, b: State): State => ({
   fill: further(a.fill, b.fill),
   ink: further(a.ink, b.ink),
   image: further(a.image, b.image),
+  hue: a.hue + b.hue,
+  glow: Math.max(a.glow, b.glow),
+  glowC: b.glow > a.glow ? b.glowC : a.glowC,
+  draw: a.draw < 0 ? b.draw : b.draw < 0 ? a.draw : a.draw * b.draw,
 });
 
 /** a computed colour (rgb(), rgba()) as numbers; transparent for anything else */
@@ -295,6 +311,7 @@ export function release(el: HTMLElement, inline: Inline, holding = true) {
   const held = el as Held;
   write(el, inline);
   paintInk(el, null);
+  paintDraw(el, -1);
   if (holding) held.__scrollworkHolds = Math.max(0, (held.__scrollworkHolds || 0) - 1);
   if (!held.__scrollworkHolds) {
     if (held.__scrollworkBare && el.getAttribute('style') === '') el.removeAttribute('style');
@@ -328,6 +345,32 @@ function paintInk(el: HTMLElement, value: string | null) {
   kept.forEach((_own, d) => (d.style.color = value));
 }
 
+/**
+ * An SVG line drawn from its start: each path or shape (the element's own, or those inside it) dashed to its own
+ * length and offset by what is not drawn yet. Their own dash settings are kept and put back at rest (`draw` -1).
+ */
+const DRAWN = new WeakMap<Element, Array<{ g: SVGGeometryElement; len: number; dash: string; off: string }>>();
+function paintDraw(el: Element, k: number) {
+  let lines = DRAWN.get(el);
+  if (k < 0) {
+    if (!lines) return;
+    for (const l of lines) { l.g.style.strokeDasharray = l.dash; l.g.style.strokeDashoffset = l.off; }
+    DRAWN.delete(el);
+    return;
+  }
+  if (!lines) {
+    const win = el.ownerDocument.defaultView;
+    const isGeo = (n: Element): n is SVGGeometryElement => !!win && n instanceof (win as unknown as { SVGGeometryElement: typeof SVGGeometryElement }).SVGGeometryElement;
+    const gs = [...(isGeo(el) ? [el] : []), ...Array.from(el.querySelectorAll('path, line, polyline, polygon, circle, ellipse, rect')).filter(isGeo)];
+    lines = gs.map((g) => ({ g, len: Math.max(1, g.getTotalLength ? g.getTotalLength() : 0), dash: g.style.strokeDasharray, off: g.style.strokeDashoffset }));
+    DRAWN.set(el, lines);
+  }
+  for (const l of lines) {
+    l.g.style.strokeDasharray = l.len + ' ' + l.len;
+    l.g.style.strokeDashoffset = String(l.len * (1 - Math.min(1, Math.max(0, k))));
+  }
+}
+
 /** Paint a state, added to the element's own look. */
 export function paint(el: HTMLElement, s: State, b: Base) {
   if (s.x || s.y || s.yp || s.xp) {
@@ -359,7 +402,16 @@ export function paint(el: HTMLElement, s: State, b: Base) {
     el.style.transform = s.rx || s.ry ? 'perspective(' + (s.pz || 1000) + 'px) rotateX(' + s.rx + 'deg) rotateY(' + s.ry + 'deg)' + (b.inline.transform ? ' ' + b.inline.transform : '') : b.inline.transform;
   }
   el.style.opacity = s.opacity < 0.999 ? String(Math.max(0, b.opacity * s.opacity)) : b.inline.opacity;
-  el.style.filter = s.blur > 0.01 ? 'blur(' + s.blur + 'px)' + (b.filter ? ' ' + b.filter : '') : b.inline.filter;
+  // a blur, the colours turned round the wheel and a glow, in front of the element's own filter
+  const fl: string[] = [];
+  if (s.blur > 0.01) fl.push('blur(' + s.blur + 'px)');
+  if (Math.abs(s.hue) > 0.05) fl.push('hue-rotate(' + Math.round(s.hue * 10) / 10 + 'deg)');
+  if (s.glow > 0.05) {
+    const c = s.glowC ? cssRgba(s.glowC) : 'currentColor';
+    fl.push('drop-shadow(0 0 ' + Math.round(s.glow * 10) / 10 + 'px ' + c + ') drop-shadow(0 0 ' + Math.round(s.glow * 5) / 10 + 'px ' + c + ')');
+  }
+  el.style.filter = fl.length ? fl.join(' ') + (b.filter ? ' ' + b.filter : '') : b.inline.filter;
+  paintDraw(el, s.draw);
   el.style.clipPath =
     s.clip > 0.01 || s.ct > 0.01 || s.cr > 0.01 || s.cl > 0.01 ? 'inset(' + s.ct + '% ' + s.cr + '% ' + s.clip + '% ' + s.cl + '%)' : b.inline.clipPath;
   // a colour: part of the way from the element's own to the state's
