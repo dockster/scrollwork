@@ -120,7 +120,7 @@ export function cssEase(name: MotionEase): string {
 }
 
 /**
- * A spring (Figma's Gentle, Quick, Bouncy, Slow, or its own stiffness,
+ * A spring (a preset: Gentle, Quick, Bouncy, Slow, or its own stiffness,
  * damping and mass) from 0 to 1, starting at rest. Its time is its own: how
  * long it takes to settle within a thousandth of the end, capped at 10 s.
  * `ease` maps 0 to 1 of that time onto the spring's position, so a timeline
@@ -162,7 +162,7 @@ function solveSpring(stiffness: number, damping: number, mass: number): { ease: 
   return { ease: (t: number) => (t <= 0 ? 0 : t >= 1 ? 1 : at(t * duration)), duration };
 }
 
-/** Figma's spring presets, as stiffness, damping and mass. */
+/** The four spring presets, as stiffness, damping and mass. */
 export const SPRINGS: Record<'gentle' | 'quick' | 'bouncy' | 'slow', [number, number, number]> = {
   gentle: [100, 15, 1],
   quick: [300, 20, 1],

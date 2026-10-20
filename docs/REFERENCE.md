@@ -282,7 +282,7 @@ and `animate()`'s `ease`.
 
 **Springs.** `spring(stiffness, damping, mass)` returns `{ ease, duration }`:
 the curve, and the seconds it takes to settle within a thousandth of the end.
-`SPRINGS` holds Figma's four as `[stiffness, damping, mass]`: `gentle`
+`SPRINGS` holds four presets as `[stiffness, damping, mass]`: `gentle`
 (100, 15, 1), `quick` (300, 20, 1), `bouncy` (600, 15, 1), `slow` (80, 20, 1).
 An interaction plays a spring over its `duration`, so give it the spring's own
 settle time.

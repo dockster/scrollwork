@@ -154,8 +154,9 @@ as far as each is from the centre;
 `origin` (`center`, `top`, `bottom`, `left`, `right`) is the point they turn
 about (the element's own `origin`, in the table above, is where the whole element turns).
 
-If the JSON is broken, or a value is not one Scrollwork knows, it says so in
-the console (`[scrollwork] …`) and uses the default. Pass `warn: false` to
+If a value is not one Scrollwork knows, it says so in the console
+(`[scrollwork] …`) and uses the default. If the JSON is broken, it says so and
+leaves the element as it is. Keys it does not know are ignored without a note. Pass `warn: false` to
 quiet it.
 
 ## API
@@ -169,7 +170,7 @@ quiet it.
 | `inView(targets, onEnter, options?)` | stop function | Run `onEnter(el)` on arrival; return a function to run on leaving |
 | `scroll(handler, options?)` | stop function | Call `handler(progress)` or scrub an animation or a timeline as the page scrolls |
 | `easeOf(ease)` | `(t) => number` | Any curve as a function |
-| `spring(stiffness, damping, mass)` | `{ ease, duration }` | A spring as a curve, and how long it takes to settle; `SPRINGS` has Figma's four |
+| `spring(stiffness, damping, mass)` | `{ ease, duration }` | A spring as a curve, and how long it takes to settle; `SPRINGS` has four presets: gentle, quick, bouncy, slow |
 
 A **control** (`auto`, `start`) has `stop()`, which gives every element back
 exactly as it was, `replay()`, and in seek mode `seek(y, height, now?, bottom?)`:
