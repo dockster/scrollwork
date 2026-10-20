@@ -1,7 +1,7 @@
-/*! Pixel distortion after Codrops' Distorted Pixels, MIT, (c) Codrops: github.com/codrops/DistortedPixels */
+/*! Pixel distortion after Codrops' Distorted Pixels, MIT, (c) Codrops: github.com/akella/DistortedPixels */
 
 // Pixel distortion, after Codrops' Distorted Pixels (MIT, (c) Codrops,
-// github.com/codrops/DistortedPixels; docs/THIRD-PARTY.md): the picture is
+// github.com/akella/DistortedPixels; docs/THIRD-PARTY.md): the picture is
 // drawn shifted by an offset grid the surface keeps (surface.ts, u_offsets,
 // nearest-sampled so each cell moves as one block). Rows of the grid count up
 // from the bottom, as in the original; the picture's uv counts down.

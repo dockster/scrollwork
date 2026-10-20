@@ -370,6 +370,6 @@ npm run test:browsers   # Chromium, WebKit and Firefox (after the build)
 MIT, © 2026 uxspot.io
 
 The `distort` effect follows Codrops' Distorted Pixels
-(github.com/codrops/DistortedPixels, MIT, © Codrops); its notice is in
+(github.com/akella/DistortedPixels, MIT, © Codrops); its notice is in
 [docs/THIRD-PARTY.md](docs/THIRD-PARTY.md). So does the `bulge` effect, after
 Codrops' 3D Bulge Text Effect (tympanus.net/codrops/?p=76625, MIT, © Codrops).
