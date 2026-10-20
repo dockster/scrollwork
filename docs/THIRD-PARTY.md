@@ -3,8 +3,9 @@
 ## Distorted Pixels (Codrops)
 
 The `distort` effect in scrollwork/fx (src/fx/surface.ts `stepDistortion`,
-src/fx/shaders/distort.ts) follows the algorithm of Codrops' Distorted Pixels,
-github.com/codrops/DistortedPixels, rewritten for plain WebGL2 without three.js.
+src/fx/shaders/distort.ts) follows the algorithm of Codrops' Distorted Pixels by
+Yuri Artiukh (tympanus.net/codrops/2022/01/12/pixel-distortion-effect-with-three-js,
+github.com/akella/DistortedPixels), rewritten for plain WebGL2 without three.js.
 
 MIT License
 
