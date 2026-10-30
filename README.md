@@ -304,7 +304,8 @@ auto(document.body, { plugins: [fx] });
 ```
 
 `fx` is a list; each effect has a `type` and an `on` (`hover`, the default
-for most, `appear`, `always` or `scroll`, the scroll speed), an `intensity`
+for most, `appear`, `always`, `scroll`, the scroll speed, or `progress`, how far
+through its scroll range the element is), an `intensity`
 (0 to 1), a `speed` and the fields of its own in
 [docs/REFERENCE.md](docs/REFERENCE.md#fx). The effect reads the element's own
 picture (its `background-image`) and draws over it inside the element, under
@@ -316,12 +317,14 @@ put the picture on a `<div>`'s background instead.
 
 Effects: `glitch` (blocks of the picture shift and the colours split while
 hovering), `dither` (a crisp field of bayer or halftone dots over a drifting
-cloud or the element's picture, with a pointer trail) and `distort` (the
+cloud or the element's picture, with a pointer trail), `distort` (the
 pointer pushes the picture's cells along its path and they ease back, after
 Codrops' Distorted Pixels; with no pointer, on `always` or `scroll`, a slow
 sweep moves them), and `bulge` (the picture, or the element's own words, swells
 towards the eye under a lit dome that follows the pointer, after Codrops' 3D Bulge
-Text Effect). More follow.
+Text Effect), and `colormap` (the picture's light read through a ramp of five
+colours, a heat camera's view, fading in or sweeping across as its scroll goes
+by). More follow.
 
 ## Accessibility
 
