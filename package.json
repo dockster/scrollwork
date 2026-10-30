@@ -1,7 +1,7 @@
 {
   "name": "scrollwork",
   "version": "1.18.1",
-  "description": "Scroll, appear, pin and interaction motion for the web, from JSON or data attributes, plus animate(), timeline(), inView() and scroll(). No dependencies, respects reduced motion.",
+  "description": "Scroll, appear, pin and interaction motion for the web, from JSON or data attributes, plus animate(), timeline(), inView() and scroll(). Rollovers, text by line or letter, and WebGL effects on pictures: glitch, dither, distort, bulge and colormap. No dependencies, respects reduced motion.",
   "type": "module",
   "main": "./dist/scrollwork.mjs",
   "module": "./dist/scrollwork.mjs",
@@ -74,7 +74,6 @@
     "scroll-animation",
     "parallax",
     "motion",
-    "scrolltrigger",
     "timeline",
     "in-view",
     "reduced-motion",
@@ -82,7 +81,12 @@
     "flip",
     "morph",
     "draggable",
-    "motion-path"
+    "motion-path",
+    "webgl",
+    "shader",
+    "glitch",
+    "dither",
+    "rollover"
   ],
   "author": "uxspot.io",
   "license": "MIT",
